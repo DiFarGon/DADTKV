@@ -1,7 +1,16 @@
-﻿internal class Program
+﻿namespace Client
 {
-    public static void Main(string[] args)
+    internal class Program
     {
-        Console.WriteLine("Client is running!");
+        public static void Main(string[] args)
+        {
+            if (args.Length != 2)
+            {
+                Console.Error.WriteLine("wrong arguments!");
+                return;
+            }
+
+            Client client = new Client(args[0], args[1]);
+        }
     }
 }

@@ -1,7 +1,16 @@
-﻿internal class Program
+﻿namespace TransactionManager
 {
-    public static void Main(string[] args)
+
+    internal class Program
     {
-        Console.WriteLine("TransactionManager is running!");
+        public static void Main(string[] args)
+        {
+            if (args.Length != 2)
+            {
+                Console.Error.WriteLine("wrong arguments!");
+                return;
+            }
+            TransactionManager transactionManager = new TransactionManager(args[0], args[1]);
+        }
     }
 }
