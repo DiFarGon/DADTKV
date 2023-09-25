@@ -3,7 +3,18 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.7.34031.279
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "dadtkv", "dadtkv\dadtkv.csproj", "{C74D9E09-C55E-45D1-8B9A-377A8ED9BEC6}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "dadtkv", "dadtkv\dadtkv.csproj", "{C74D9E09-C55E-45D1-8B9A-377A8ED9BEC6}"
+	ProjectSection(ProjectDependencies) = postProject
+		{67D2A0D8-B4B5-4CC6-AC5A-6FB75F86A6B7} = {67D2A0D8-B4B5-4CC6-AC5A-6FB75F86A6B7}
+		{7C81A770-03CD-459D-AD83-E5F99D844B08} = {7C81A770-03CD-459D-AD83-E5F99D844B08}
+		{A4DFE17E-B1F5-4184-9275-157628AB7931} = {A4DFE17E-B1F5-4184-9275-157628AB7931}
+	EndProjectSection
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "LeaseManager", "LeaseManager\LeaseManager.csproj", "{A4DFE17E-B1F5-4184-9275-157628AB7931}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "TransactionManager", "TransactionManager\TransactionManager.csproj", "{67D2A0D8-B4B5-4CC6-AC5A-6FB75F86A6B7}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Client", "Client\Client.csproj", "{7C81A770-03CD-459D-AD83-E5F99D844B08}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -15,6 +26,18 @@ Global
 		{C74D9E09-C55E-45D1-8B9A-377A8ED9BEC6}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{C74D9E09-C55E-45D1-8B9A-377A8ED9BEC6}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{C74D9E09-C55E-45D1-8B9A-377A8ED9BEC6}.Release|Any CPU.Build.0 = Release|Any CPU
+		{A4DFE17E-B1F5-4184-9275-157628AB7931}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A4DFE17E-B1F5-4184-9275-157628AB7931}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A4DFE17E-B1F5-4184-9275-157628AB7931}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A4DFE17E-B1F5-4184-9275-157628AB7931}.Release|Any CPU.Build.0 = Release|Any CPU
+		{67D2A0D8-B4B5-4CC6-AC5A-6FB75F86A6B7}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{67D2A0D8-B4B5-4CC6-AC5A-6FB75F86A6B7}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{67D2A0D8-B4B5-4CC6-AC5A-6FB75F86A6B7}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{67D2A0D8-B4B5-4CC6-AC5A-6FB75F86A6B7}.Release|Any CPU.Build.0 = Release|Any CPU
+		{7C81A770-03CD-459D-AD83-E5F99D844B08}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{7C81A770-03CD-459D-AD83-E5F99D844B08}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{7C81A770-03CD-459D-AD83-E5F99D844B08}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{7C81A770-03CD-459D-AD83-E5F99D844B08}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

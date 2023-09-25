@@ -1,6 +1,4 @@
-﻿using System;
-using System.Diagnostics;
-using System.Globalization;
+﻿using System.Diagnostics;
 
 namespace Dadtkv
 {
@@ -91,16 +89,19 @@ namespace Dadtkv
         private static void newTransactionManager(string id, string url)
         {
             Console.WriteLine("Creating new transaction manager with id {0} and url {1}", id, url);
+            Process.Start("TransactionManager.exe");
         }
 
         private static void newLeaseManager(string id, string url)
         {
             Console.WriteLine("Creating new lease manager with id {0} and url {1}", id, url);
+            Process.Start("LeaseManager.exe");
         }
 
         private static void newClient(string id, string url)
         {
             Console.WriteLine("Creating new client with id {0} and url {1}", id, url);
+            Process.Start("Client.exe");
         }
     }
 }
