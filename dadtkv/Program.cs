@@ -1,4 +1,6 @@
-﻿namespace dadtkv
+﻿using System.Security.Cryptography.X509Certificates;
+
+namespace dadtkv
 {
     internal class Program
     {
@@ -10,6 +12,7 @@
                 return;
             }
 
+            Console.WriteLine(args[0]);
             string[] script = File.ReadAllLines(args[0]);
 
             MainProcess mainProcess = new MainProcess();
@@ -37,6 +40,7 @@
                         break;
                 }
             }
+            mainProcess.launchProcesses();
             return;
         }
     }

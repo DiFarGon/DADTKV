@@ -1,10 +1,28 @@
 ﻿using System.Diagnostics;
+using System.Transactions;
 
 namespace dadtkv
 {
     internal class MainProcess
     {
-        private bool debug = true;
+        private bool debug;
+        private string path;
+        private List<ProcessInfo> clients;
+        private List<ProcessInfo> transactionManagers;
+        private List<ProcessInfo> leaseManagers;
+
+        public MainProcess(bool debug=true)
+        {
+            this.debug = debug;
+
+            string path = Environment.CurrentDirectory;
+            int lastIndex = path.LastIndexOf('\\');
+            this.path = path.Substring(0, lastIndex);
+
+            this.clients = new List<ProcessInfo>();
+            this.transactionManagers = new List<ProcessInfo>();
+            this.leaseManagers = new List<ProcessInfo>();
+        }
 
         private void Logger(string message)
         {
@@ -23,14 +41,14 @@ namespace dadtkv
 
             switch (type)
             {
+                case "C":
+                    this.clients.Add(new ProcessInfo(id, url));
+                    break;
                 case "T":
-                    this.newTransactionManager(id, url);
+                    this.transactionManagers.Add(new ProcessInfo(id, url));
                     break;
                 case "L":
-                    this.newLeaseManager(id, url);
-                    break;
-                case "C":
-                    this.newClient(id, url);
+                    this.leaseManagers.Add(new ProcessInfo(id, url));
                     break;
             }
         }
@@ -61,22 +79,85 @@ namespace dadtkv
             this.Logger("I don't really want to do this right now");
         }
 
-        private void newTransactionManager(string id, string url)
+        private void launchClient(ProcessInfo client)
         {
-            this.Logger($"Creating new transaction manager with id '{id}' and url '{url}'");
-            Process.Start("../../../../TransactionManager/bin/Debug/net6.0/TransactionManager.exe", $"{id} {url}");
+            this.Logger($"Creating new client with id '{client.getId()}' and url '{client.getUrl()}'");
+            string command = "/c dotnet run --project " + this.path + $"\\Client\\Client.csproj {client.getId()} {client.getUrl()}";
+            Process.Start(new ProcessStartInfo(@"cmd.exe ", @command) { UseShellExecute = true });
         }
 
-        private void newLeaseManager(string id, string url)
+        private void launchTransactionManager(ProcessInfo transactionManager)
         {
-            this.Logger($"Creating new lease manager with id '{id}' and url '{url}'");
-            Process.Start("../../../../LeaseManager/bin/Debug/net6.0/LeaseManager.exe", $"{id} {url}");
+            int clusterId = 0;
+            string clusterNodes = "";
+
+            for (int i = 0; i < this.transactionManagers.Count; i++)
+            {
+                if (this.transactionManagers[i] ==  transactionManager)
+                {
+                    clusterId = i;
+                    continue;
+                }
+                clusterNodes += $"{i}-{this.transactionManagers[i].getId()}-{this.transactionManagers[i].getUrl()}";
+            }
+
+            this.Logger($"Creating new transaction manager with id '{transactionManager.getId()}' and url '{transactionManager.getUrl()}'");
+            Console.WriteLine(this.path);
+            string command = "/c dotnet run --project " + this.path + $"\\TransactionManager\\TransactionManager.csproj {clusterId} {transactionManager.getId()} {transactionManager.getUrl()} {clusterNodes}";
+            Process.Start(new ProcessStartInfo(@"cmd.exe ", @command) { UseShellExecute = true });
         }
 
-        private void newClient(string id, string url)
+        private void launchLeaseManager(ProcessInfo leaseManager)
         {
-            this.Logger($"Creating new client with id '{id}' and url '{url}'");
-            Process.Start("../../../../Client/bin/Debug/net6.0/Client.exe", $"{id} {url}");
+            int clusterId = 0;
+            string clusterNodes = "";
+
+            for (int i = 0; i < this.leaseManagers.Count; i++)
+            {
+                if (this.leaseManagers[i] == leaseManager)
+                {
+                    clusterId = i;
+                    continue;
+                }
+                clusterNodes += $"{i}-{this.transactionManagers[i].getId()}-{this.transactionManagers[i].getUrl()}";
+            }
+
+            this.Logger($"Creating new lease manager with id '{leaseManager.getId()}' and url '{leaseManager.getUrl()}'");
+            string command = "/c dotnet run --project " + this.path + $"\\LeaseManager\\LeaseManager.csproj {clusterId} {leaseManager.getId()} {leaseManager.getUrl()} {clusterNodes}";
+            Console.WriteLine(command);
+            Process.Start(new ProcessStartInfo(@"cmd.exe ", @command) { UseShellExecute = true });
         }
+
+        public void launchProcesses()
+        {
+            foreach (ProcessInfo client in this.clients)
+            {
+                this.launchClient(client);
+            }
+            foreach (ProcessInfo transactionManager in this.transactionManagers)
+            {
+                this.launchTransactionManager(transactionManager);
+            }
+            foreach (ProcessInfo leaseManager in this.leaseManagers)
+            {
+                this.launchLeaseManager(leaseManager);
+            }
+        }
+    }
+
+    internal class ProcessInfo
+    {
+        private string id;
+        private string url;
+
+        public ProcessInfo(string id, string url)
+        {
+            this.id = id;
+            this.url = url;
+        }
+
+        public string getId() { return this.id; }
+
+        public string getUrl() { return this.url; }
     }
 }
