@@ -112,6 +112,8 @@ namespace dadtkv
             int clusterId = 0;
             string clusterNodes = "";
 
+            string tmNodes = "";
+
             for (int i = 0; i < this.leaseManagers.Count; i++)
             {
                 if (this.leaseManagers[i] == leaseManager)
@@ -122,8 +124,13 @@ namespace dadtkv
                 clusterNodes += $"{i}-{this.transactionManagers[i].getId()}-{this.transactionManagers[i].getUrl()}";
             }
 
+            for (int i = 0; i < this.transactionManagers.Count; i++)
+            {
+                tmNodes += $"{i}-{this.transactionManagers[i].getId()}-{this.transactionManagers[i].getUrl()}";
+            }
+
             this.Logger($"Creating new lease manager with id '{leaseManager.getId()}' and url '{leaseManager.getUrl()}'");
-            string command = "/c dotnet run --project " + this.path + $"\\LeaseManager\\LeaseManager.csproj {clusterId} {leaseManager.getId()} {leaseManager.getUrl()} {clusterNodes}";
+            string command = "/c dotnet run --project " + this.path + $"\\LeaseManager\\LeaseManager.csproj {clusterId} {leaseManager.getId()} {leaseManager.getUrl()} {clusterNodes} {tmNodes}";
             Console.WriteLine(command);
             Process.Start(new ProcessStartInfo(@"cmd.exe ", @command) { UseShellExecute = true });
         }
