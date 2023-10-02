@@ -1,0 +1,16 @@
+syntax = "proto3";
+
+service LeaseManagerService {
+    // RPC for exchanging control messages with other lease managers
+    rpc ControlLM(ControlLMRequest) returns (ControlLMResponse);
+}
+
+message ControlLMRequest {
+    // Unique identifier for the request
+    string lm_id = 1;
+}
+
+message ControlLMResponse {
+    // Acknowledgment of request reception
+    string lm_id = 1;
+}
