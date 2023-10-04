@@ -11,8 +11,9 @@ namespace dadtkv
         private List<ProcessInfo> clients;
         private List<ProcessInfo> transactionManagers;
         private List<ProcessInfo> leaseManagers;
+         private int slotDuration;
 
-        public MainProcess(bool debug=true)
+        public MainProcess(bool debug)
         {
             this.debug = debug;
 
@@ -72,9 +73,9 @@ namespace dadtkv
 
         internal void handleD(string line)
         {
-            string time = line.Split(' ')[1];
+            this.slotDuration = int.Parse(line.Split(' ')[1]);
 
-            this.Logger($"Each slot lasts {time} miliseconds");
+            this.Logger($"Each slot lasts {this.slotDuration} miliseconds");
         }
 
         internal void handleT(string line)
@@ -93,12 +94,14 @@ namespace dadtkv
         {
             this.Logger($"Creating new client with id '{client.getId()}' and url '{client.getUrl()}'");
             
-            // TODO: add multiple console window launching
+            string arguments = $"{client.getId()} {client.getUrl()}";
+
             if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
             {
-                string command = "/c dotnet run --project " + this.path + $"\\Client\\Client.csproj {client.getId()} {client.getUrl()}";
+                string command = $"/c dotnet run --project {this.path}\\Client\\Client.csproj {arguments}";
                 Process.Start(new ProcessStartInfo(@"cmd.exe ", @command) { UseShellExecute = true });
             }
+            // TODO: add multiple console window launching
             else
             {
                 string command = $"run --project {path}/Client/Client.csproj {client.getId()} {client.getUrl()}";
@@ -123,15 +126,18 @@ namespace dadtkv
 
             this.Logger($"Creating new transaction manager with id '{transactionManager.getId()}' and url '{transactionManager.getUrl()}'");
 
-            // TODO: add multiple console window launching
+            string arguments = $"{clusterId} {transactionManager.getId()} {transactionManager.getUrl()} {clusterNodes}";
+            if (this.debug) { arguments += " debug"; }
+
             if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
             {
-                string command = "/c dotnet run --project " + this.path + $"\\TransactionManager\\TransactionManager.csproj {clusterId} {transactionManager.getId()} {transactionManager.getUrl()} {clusterNodes}";
+                string command = $"/c dotnet run --project {this.path}\\TransactionManager\\TransactionManager.csproj {arguments}";
                 Process.Start(new ProcessStartInfo(@"cmd.exe ", @command) { UseShellExecute = true });
             }
+            // TODO: add multiple console window launching
             else
             {
-                string command = $"run --project {path}/TransactionManager/TransactionManager.csproj {clusterId} {transactionManager.getId()} {transactionManager.getUrl()} {clusterNodes}";
+                string command = $"run --project {path}/TransactionManager/TransactionManager.csproj {arguments}";
                 Process.Start("dotnet", command);
 
             }
@@ -161,15 +167,19 @@ namespace dadtkv
 
             this.Logger($"Creating new lease manager with id '{leaseManager.getId()}' and url '{leaseManager.getUrl()}'");
 
-            // TODO: add multiple console window launching
+            string[] parts = leaseManager.getUrl().Split(':');
+
+            string arguments = $"{clusterId} {leaseManager.getId()} {leaseManager.getUrl()} {parts[1]} {clusterNodes} {tmNodes} {this.slotDuration}";
+            
             if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows)) 
             {
-                string command = "/c dotnet run --project " + this.path + $"\\LeaseManager\\LeaseManager.csproj {clusterId} {leaseManager.getId()} {leaseManager.getUrl()} {clusterNodes} {tmNodes}";
+                string command = $"/c dotnet run --project {this.path}\\LeaseManager\\LeaseManager.csproj {arguments}";
                 Process.Start(new ProcessStartInfo(@"cmd.exe ", @command) { UseShellExecute = true });
             }
+            // TODO: add multiple console window launching
             else 
             {
-                string command = $"dotnet run --project {path}/LeaseManager/LeaseManager.csproj {clusterId} {leaseManager.getId()} {leaseManager.getUrl()} {clusterNodes} {tmNodes}";
+                string command = $"dotnet run --project {this.path}/LeaseManager/LeaseManager.csproj {arguments}";
                 Process.Start("dotnet", command);
             }
         }
