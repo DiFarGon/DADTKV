@@ -9,7 +9,6 @@ namespace LeaseManager
             // <run> <clusterId> <id> <url> <port> <lms> <tms> <time_between_paxos_instances> <debug?>
             // TODO: check args? 
 
-            // FIXME: will receive another argument defining time between paxos instances
             if (args.Length < 7 || args.Length > 8)
             {
                 Console.WriteLine("Wrong number of arguments");
@@ -33,6 +32,21 @@ namespace LeaseManager
 
             leaseManager.setPaxosClusterNodes(args[4]);
             leaseManager.setTmClusterNodes(args[5]);
+
+            DateTime lastPaxosInstance = DateTime.Now;
+
+            //  TODO: initiate paxos instance, call it taking into account the time between paxos instances and the timeouts suspecting the proposer
+            while (true)
+            {
+                //  TODO: should i take into account here the 2sec sleep time?
+                if (DateTime.Now - lastPaxosInstance > TimeSpan.FromSeconds(int.Parse(args[6])) && leaseManager.isIdle())
+                {
+                    // leaseManager.controlMsgs();
+                    if (leaseManager.isProposer()) leaseManager.propose();
+                }
+                lastPaxosInstance = DateTime.Now;
+            }
+
         }
     }
 }
