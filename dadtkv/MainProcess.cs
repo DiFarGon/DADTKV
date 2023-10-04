@@ -1,6 +1,7 @@
 ﻿using System.Diagnostics;
 using System.Transactions;
 using System.Runtime.InteropServices;
+using System.Globalization;
 
 namespace dadtkv
 {
@@ -11,7 +12,9 @@ namespace dadtkv
         private List<ProcessInfo> clients;
         private List<ProcessInfo> transactionManagers;
         private List<ProcessInfo> leaseManagers;
-         private int slotDuration;
+        private int slots;
+        private int slotDuration;
+        private DateTime startTime;
 
         public MainProcess(bool debug)
         {
@@ -66,9 +69,9 @@ namespace dadtkv
 
         internal void handleS(string line)
         {
-            string slots = line.Split(' ')[1];
+            this.slots = int.Parse(line.Split(' ')[1]);
 
-            this.Logger($"Test lasts {slots} slots");
+            this.Logger($"Test lasts {this.slots} slots");
         }
 
         internal void handleD(string line)
@@ -80,9 +83,9 @@ namespace dadtkv
 
         internal void handleT(string line)
         {
-            string time = line.Split(' ')[1];
-
-            this.Logger($"Test starts at {time}");
+            string format = "hh:mm:ss";
+            this.startTime = DateTime.ParseExact(line.Split(' ')[1], format, null, DateTimeStyles.None);
+            this.Logger($"Test starts at {this.startTime}");
         }
 
         internal void handleF(string line)
