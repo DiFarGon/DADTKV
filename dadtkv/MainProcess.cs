@@ -127,7 +127,6 @@ namespace dadtkv
             this.Logger($"Creating new transaction manager with id '{transactionManager.getId()}' and url '{transactionManager.getUrl()}'");
 
             string arguments = $"{clusterId} {transactionManager.getId()} {transactionManager.getUrl()} {clusterNodes}";
-            if (this.debug) { arguments += " debug"; }
 
             if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
             {
@@ -170,6 +169,7 @@ namespace dadtkv
             string[] parts = leaseManager.getUrl().Split(':');
 
             string arguments = $"{clusterId} {leaseManager.getId()} {leaseManager.getUrl()} {parts[1]} {clusterNodes} {tmNodes} {this.slotDuration}";
+            if (this.debug) { arguments += " debug"; }
             
             if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows)) 
             {
