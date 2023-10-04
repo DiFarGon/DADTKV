@@ -1,5 +1,6 @@
 ﻿using System.Diagnostics;
 using System.Transactions;
+using System.Runtime.InteropServices;
 
 namespace dadtkv
 {
@@ -16,8 +17,17 @@ namespace dadtkv
             this.debug = debug;
 
             string path = Environment.CurrentDirectory;
-            int lastIndex = path.LastIndexOf('\\');
+            int lastIndex = 0;
+            if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux) || RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
+            {
+                lastIndex = path.LastIndexOf('/');
+            }
+            else
+            {
+                lastIndex = path.LastIndexOf('\\');
+            }
             this.path = path.Substring(0, lastIndex);
+
 
             this.clients = new List<ProcessInfo>();
             this.transactionManagers = new List<ProcessInfo>();
@@ -82,8 +92,18 @@ namespace dadtkv
         private void launchClient(ProcessInfo client)
         {
             this.Logger($"Creating new client with id '{client.getId()}' and url '{client.getUrl()}'");
-            string command = "/c dotnet run --project " + this.path + $"\\Client\\Client.csproj {client.getId()} {client.getUrl()}";
-            Process.Start(new ProcessStartInfo(@"cmd.exe ", @command) { UseShellExecute = true });
+            
+            // TODO: add multiple console window launching
+            if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+            {
+                string command = "/c dotnet run --project " + this.path + $"\\Client\\Client.csproj {client.getId()} {client.getUrl()}";
+                Process.Start(new ProcessStartInfo(@"cmd.exe ", @command) { UseShellExecute = true });
+            }
+            else
+            {
+                string command = $"run --project {path}/Client/Client.csproj {client.getId()} {client.getUrl()}";
+                Process.Start("dotnet", command);
+            }
         }
 
         private void launchTransactionManager(ProcessInfo transactionManager)
@@ -102,9 +122,19 @@ namespace dadtkv
             }
 
             this.Logger($"Creating new transaction manager with id '{transactionManager.getId()}' and url '{transactionManager.getUrl()}'");
-            Console.WriteLine(this.path);
-            string command = "/c dotnet run --project " + this.path + $"\\TransactionManager\\TransactionManager.csproj {clusterId} {transactionManager.getId()} {transactionManager.getUrl()} {clusterNodes}";
-            Process.Start(new ProcessStartInfo(@"cmd.exe ", @command) { UseShellExecute = true });
+
+            // TODO: add multiple console window launching
+            if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+            {
+                string command = "/c dotnet run --project " + this.path + $"\\TransactionManager\\TransactionManager.csproj {clusterId} {transactionManager.getId()} {transactionManager.getUrl()} {clusterNodes}";
+                Process.Start(new ProcessStartInfo(@"cmd.exe ", @command) { UseShellExecute = true });
+            }
+            else
+            {
+                string command = $"run --project {path}/TransactionManager/TransactionManager.csproj {clusterId} {transactionManager.getId()} {transactionManager.getUrl()} {clusterNodes}";
+                Process.Start("dotnet", command);
+
+            }
         }
 
         private void launchLeaseManager(ProcessInfo leaseManager)
@@ -130,15 +160,23 @@ namespace dadtkv
             }
 
             this.Logger($"Creating new lease manager with id '{leaseManager.getId()}' and url '{leaseManager.getUrl()}'");
-            string command = "/c dotnet run --project " + this.path + $"\\LeaseManager\\LeaseManager.csproj {clusterId} {leaseManager.getId()} {leaseManager.getUrl()} {clusterNodes} {tmNodes}";
-            Console.WriteLine(command);
-            Process.Start(new ProcessStartInfo(@"cmd.exe ", @command) { UseShellExecute = true });
+
+            // TODO: add multiple console window launching
+            if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows)) 
+            {
+                string command = "/c dotnet run --project " + this.path + $"\\LeaseManager\\LeaseManager.csproj {clusterId} {leaseManager.getId()} {leaseManager.getUrl()} {clusterNodes} {tmNodes}";
+                Process.Start(new ProcessStartInfo(@"cmd.exe ", @command) { UseShellExecute = true });
+            }
+            else 
+            {
+                string command = $"dotnet run --project {path}/LeaseManager/LeaseManager.csproj {clusterId} {leaseManager.getId()} {leaseManager.getUrl()} {clusterNodes} {tmNodes}";
+                Process.Start("dotnet", command);
+            }
         }
 
         public void launchProcesses()
         {
-            foreach (ProcessInfo client in this.clients)
-            {
+            foreach (ProcessInfo client in this.clients) {
                 this.launchClient(client);
             }
             foreach (ProcessInfo transactionManager in this.transactionManagers)
