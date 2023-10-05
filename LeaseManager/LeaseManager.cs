@@ -219,11 +219,14 @@ namespace LeaseManager
                     }
                 }
 
-                Task<ControlLMResponse> completedTask = await Task.WhenAny(responseTasks);
-                responseTasks.Remove(completedTask);
+                if (responseTasks.Count != 0)
+                {
+                    Task<ControlLMResponse> completedTask = await Task.WhenAny(responseTasks);
+                    responseTasks.Remove(completedTask);
 
-                ControlLMResponse response = await completedTask;
-                nodeIds_lastHeartbeat[response.LmId] = (DateTime.Now, nodeIds_lastHeartbeat[response.LmId].Item2);
+                    ControlLMResponse response = await completedTask;
+                    nodeIds_lastHeartbeat[response.LmId] = (DateTime.Now, nodeIds_lastHeartbeat[response.LmId].Item2);
+                }
             }
         }
 
