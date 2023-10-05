@@ -19,7 +19,7 @@ namespace LeaseManager
             }
 
             bool debug = false;
-            if (args.Length == 8 && args[8] == "debug")
+            if (args.Length == 9 && args[8] == "debug")
                 debug = true;
 
             LeaseManager leaseManager = new LeaseManager(int.Parse(args[0]), args[1], args[2], args[7], debug);
