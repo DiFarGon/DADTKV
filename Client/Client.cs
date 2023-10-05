@@ -12,13 +12,16 @@ namespace Client
     public class Client
     {
         private string id;
-        private bool debug = true;
+        private string tmUrl;
+        private bool debug;
         private readonly GrpcChannel channel;
         private readonly ClientService.ClientServiceClient client;
 
-        public Client(string id)
+        public Client(string id, string tmUrl, bool debug)
         {
             this.id = id;
+            this.tmUrl = tmUrl;
+            this.debug = debug;
 
             this.Logger("created");
             Thread.Sleep(1000);
