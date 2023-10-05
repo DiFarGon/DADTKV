@@ -15,6 +15,7 @@ namespace dadtkv
         private int slots;
         private int slotDuration;
         private DateTime startTime;
+        private Func<ProcessInfo> assignTransactionManager;
 
         public MainProcess(bool debug)
         {
@@ -32,10 +33,24 @@ namespace dadtkv
             }
             this.path = path.Substring(0, lastIndex);
 
-
             this.clients = new List<ProcessInfo>();
             this.transactionManagers = new List<ProcessInfo>();
             this.leaseManagers = new List<ProcessInfo>();
+
+            int next = 0;
+
+            this.assignTransactionManager = () => {
+                ProcessInfo transactionManager = this.transactionManagers[next];
+                if (next == this.transactionManagers.Count - 1)
+                {
+                    next = 0;
+                }
+                else
+                {
+                    next += 1;
+                }
+                return transactionManager;
+            };
         }
 
         private void Logger(string message)
@@ -95,9 +110,12 @@ namespace dadtkv
 
         private void launchClient(ProcessInfo client)
         {
+            // <id> <url> <port>? <id> <tms> <startTime> <debug?>
+
             this.Logger($"Creating new client with id '{client.getId()}' and url '{client.getUrl()}'");
             
-            string arguments = $"{client.getId()} {client.getUrl()}";
+            string arguments = $"{client.getId()} {client.getUrl()} {this.assignTransactionManager().getUrl()} {this.getAllTransactionManagersString()} {this.startTime}";
+            if (this.debug) { arguments += " debug"; }
 
             if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
             {
@@ -107,13 +125,15 @@ namespace dadtkv
             // TODO: add multiple console window launching
             else
             {
-                string command = $"run --project {path}/Client/Client.csproj {client.getId()} {client.getUrl()}";
+                string command = $"run --project {path}/Client/Client.csproj {arguments}";
                 Process.Start("dotnet", command);
             }
         }
 
         private void launchTransactionManager(ProcessInfo transactionManager)
         {
+            // <clusterId> <id> <url> <port> <lms> <tms> <duration> <debug?>
+
             this.Logger($"Creating new transaction manager with id '{transactionManager.getId()}' and url '{transactionManager.getUrl()}'");
 
             (int clusterId, string clusterNodes) = this.getClusterIdAndTransactionManagersString(transactionManager);
@@ -153,6 +173,8 @@ namespace dadtkv
 
         private void launchLeaseManager(ProcessInfo leaseManager)
         {
+            // <clusterId> <id> <url> <port> <lms> <tms> <duration> <debug?>
+            
             this.Logger($"Creating new lease manager with id '{leaseManager.getId()}' and url '{leaseManager.getUrl()}'");
 
             (int clusterId, string clusterNodes) = this.getClusterIdAndLeaseManagersString(leaseManager);
