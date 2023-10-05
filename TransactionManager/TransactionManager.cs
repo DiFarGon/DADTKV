@@ -1,4 +1,5 @@
-﻿using System;
+﻿using Grpc.Core;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -12,12 +13,14 @@ namespace TransactionManager
         private string url;
         private bool debug = true;
 
+
         public TransactionManager(string id, string url)
         {
             this.id = id;
             this.url = url;
 
             this.Logger("created");
+
         }
 
         private void Logger(string message)

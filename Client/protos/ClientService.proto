@@ -1,0 +1,31 @@
+syntax = "proto3";
+
+option csharp_namespace = "Client";
+
+service ClientService{
+rpc Status(StatusRequest) returns (StatusReply);
+rpc Transaction(TransactionRequest) returns (TransactionReply);
+}
+
+message StatusRequest{
+
+}
+
+message StatusReply{
+
+}
+
+message TransactionRequest{
+	string clientId = 1;
+	repeated string keysRead = 2;
+	repeated DadInt keysWrite = 3;
+}
+
+message TransactionReply{
+	repeated DadInt read = 1;
+}
+
+message DadInt{
+	string key = 1;
+	int32 value = 2;
+}
