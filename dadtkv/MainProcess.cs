@@ -164,7 +164,7 @@ namespace dadtkv
 
             for (int i = 0; i < this.transactionManagers.Count; i++)
             {
-                tmNodes += $"{i}-{this.transactionManagers[i].getId()}-{this.transactionManagers[i].getUrl()}";
+                tmNodes += $"{i}-{this.transactionManagers[i].getId()}-{this.transactionManagers[i].getUrl()};";
             }
 
             this.Logger($"Creating new lease manager with id '{leaseManager.getId()}' and url '{leaseManager.getUrl()}'");
