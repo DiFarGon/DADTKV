@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Dynamic;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using System.Text;
 using System.Threading.Tasks;
 using System.Transactions;
@@ -17,15 +18,25 @@ namespace LeaseManager
         private string url;
         private bool debug;
 
-        private Dictionary<int, string> paxosNodes_ids = new Dictionary<int, string>();
+        private Dictionary<int, (DateTime, bool)> nodeIds_lastHeartbeat = new Dictionary<int, (DateTime, bool)>(); // used for detecting failures, item2 of the value is to keep track of the respective node's state (suspected down or not)
 
-        private Dictionary<string, LeaseManagerService.LeaseManagerServiceClient> ids_lmsServices =
-            new Dictionary<string, LeaseManagerService.LeaseManagerServiceClient>();
+        private LeaseManagerService.LeaseManagerServiceClient ownClient; // client that is this server to send accept msgs to himself so that a majority includes himself
 
-        private Dictionary<int, string> tmsNodes_ids = new Dictionary<int, string>();
+        private int paxosNodesCount = 1;
+        private Dictionary<int, (string, LeaseManagerService.LeaseManagerServiceClient)> ids_lmsServices =
+            new Dictionary<int, (string, LeaseManagerService.LeaseManagerServiceClient)>();
 
-        private Dictionary<string, TransactionManagerService.TransactionManagerServiceClient> ids_tmsServices =
-            new Dictionary<string, TransactionManagerService.TransactionManagerServiceClient>();
+        private (int, int) readTS = (0, 0); // (roundId, nodeId)
+        private (int, int) writeTS = (0, 0); // (roundId, nodeId)
+        private List<string> lastAcceptedValue = new List<string>();
+        private int acceptedReceivedCount = 0;
+        private bool proposer = false;
+        private bool decided = false;
+
+        private int paxosInstanceId = 0;
+
+        private Dictionary<int, (string, TransactionManagerService.TransactionManagerServiceClient)> ids_tmsServices =
+            new Dictionary<int, (string, TransactionManagerService.TransactionManagerServiceClient)>();
 
         // lease have this fromat: "tmId-dataKey1;dataKey2;dataKey3;"
         private Dictionary<string, string> granted_rqstdConflicts = new Dictionary<string, string>(); // key is a granted lease, value is a the lease in queue that conflicts with it ; TODO: maybe could have multiple values?
@@ -50,18 +61,42 @@ namespace LeaseManager
             this.url = url;
             this.debug = debugMode;
 
-            if (this.debug)
-                this.Logger("created");
+            GrpcChannel channel = GrpcChannel.ForAddress(url);
+            this.ownClient = new LeaseManagerService.LeaseManagerServiceClient(channel);
+
+            // TODO: no taking into account the fact that the leader might change due to timeouts
+            if (clusterId == 0) this.proposer = true;
+
+            this.Logger("created");
         }
 
-        private void Logger(string message)
+        public void Logger(string message)
         {
-            Console.WriteLine($"[ LM {this.id} (P{this.clusterId}) ]\t" + message + '\n');
+            if (this.debug) Console.WriteLine($"(TimeStamp: {DateTime.UtcNow}): [ LM {this.id} (P{this.clusterId}) ]\t" + message + '\n');
         }
 
-        public string getClusterId() { return this.clusterId.ToString(); }
+        public bool isProposer() { return this.proposer; }
 
-        public string getId() { return this.id; }
+        public bool isDecided() { return this.decided; }
+
+        public bool setDecided(bool value) { return this.decided = value; }
+
+        public int getClusterId() { return this.clusterId; }
+
+        public (int, int) getReadTS() { return this.readTS; }
+
+        public (int, int) getWriteTS() { return this.writeTS; }
+
+        public List<string> getLastAcceptedValue() { return this.lastAcceptedValue; }
+
+        public int getAcceptedReceivedCount() { return this.acceptedReceivedCount; }
+
+        public void setLastPromisedRound(int round, int nodeId) { this.readTS = (round, nodeId); }
+
+        public void setLastAcceptedRound(int round, int nodeId) { this.writeTS = (round, nodeId); }
+
+        //  FIXME: the data structure of the value is stil tbd
+        public void setLastAcceptedValue(List<string> value) { this.lastAcceptedValue = value; }
 
         public void setPaxosClusterNodes(string lms)
         {
@@ -74,14 +109,15 @@ namespace LeaseManager
                 string id = parts[1];
                 string url = parts[2];
 
-                this.paxosNodes_ids[n] = id;
-
                 GrpcChannel channel = GrpcChannel.ForAddress(url);
                 LeaseManagerService.LeaseManagerServiceClient client = new LeaseManagerService.LeaseManagerServiceClient(channel);
-                this.ids_lmsServices[id] = client;
+                this.ids_lmsServices[n] = (id, client);
+
+                this.nodeIds_lastHeartbeat[n] = (DateTime.Now, true);
+
+                this.paxosNodesCount++;
             }
-            if (this.debug)
-                this.Logger("set lease managers");
+            this.Logger($"set lease managers, cluster with {this.paxosNodesCount} nodes");
         }
 
         public void setTmClusterNodes(string tms)
@@ -95,14 +131,11 @@ namespace LeaseManager
                 string id = parts[1];
                 string url = parts[2];
 
-                this.tmsNodes_ids[n] = id;
-
                 GrpcChannel channel = GrpcChannel.ForAddress(url);
                 TransactionManagerService.TransactionManagerServiceClient client = new TransactionManagerService.TransactionManagerServiceClient(channel);
-                this.ids_tmsServices[id] = client;
+                this.ids_tmsServices[n] = (id, client);
             }
-            if (this.debug)
-                this.Logger("set lease managers");
+            this.Logger("set lease managers");
         }
 
         static public string parseLease(string tmId, List<string> dataKeys)
@@ -151,5 +184,216 @@ namespace LeaseManager
             this.queue_grntdConflicts[blockedLease].Remove(releasedLease);
         }
 
+        public void incAcceptedCount() { this.acceptedReceivedCount++; }
+
+        public bool isAcceptedQuorom() { return this.acceptedReceivedCount > this.paxosNodesCount / 2; }
+
+        public async Task failureDetectorAsync(int controlMsgsInterval, int timeout)
+        {
+            Thread checkHeartbeatsThread = new Thread(async () => await this.checkHeartbeatsAsync(timeout));
+            checkHeartbeatsThread.Start();
+
+            DateTime lastHeartbeat = DateTime.Now;
+            List<Task<ControlLMResponse>> responseTasks = new List<Task<ControlLMResponse>>();
+
+            while (true)
+            {
+                if (DateTime.Now - lastHeartbeat > TimeSpan.FromSeconds(controlMsgsInterval))
+                {
+                    responseTasks.Clear();
+                    ControlLMRequest request = new ControlLMRequest
+                    {
+                        LmId = this.clusterId
+                    };
+
+                    foreach (KeyValuePair<int, (string, LeaseManagerService.LeaseManagerServiceClient)> keyValuePair in this.ids_lmsServices)
+                    {
+                        Task<ControlLMResponse> res = keyValuePair.Value.Item2.ControlLMAsync(request).ResponseAsync;
+                        responseTasks.Add(res);
+
+                        this.nodeIds_lastHeartbeat[keyValuePair.Key] = (DateTime.Now, nodeIds_lastHeartbeat[keyValuePair.Key].Item2);
+                    }
+                }
+
+                Task<ControlLMResponse> completedTask = await Task.WhenAny(responseTasks);
+                responseTasks.Remove(completedTask);
+
+                ControlLMResponse response = await completedTask;
+                nodeIds_lastHeartbeat[response.LmId] = (DateTime.Now, nodeIds_lastHeartbeat[response.LmId].Item2);
+            }
+        }
+
+        private Task checkHeartbeatsAsync(int timeout)
+        {
+            while (true)
+            {
+                lock (this.nodeIds_lastHeartbeat)
+                {
+                    foreach (KeyValuePair<int, (DateTime, bool)> pair in this.nodeIds_lastHeartbeat)
+                    {
+                        if (DateTime.Now - pair.Value.Item1 > TimeSpan.FromSeconds(timeout)) this.nodeIds_lastHeartbeat[pair.Key] = (pair.Value.Item1, false);
+                        else this.nodeIds_lastHeartbeat[pair.Key] = (pair.Value.Item1, true);
+                    }
+                }
+                if (this.isLowestNodeAlive()) this.proposer = true;
+                else this.proposer = false;
+                Thread.Sleep(timeout);
+            }
+        }
+
+        private bool isLowestNodeAlive()
+        {
+            foreach (KeyValuePair<int, (DateTime, bool)> pair in this.nodeIds_lastHeartbeat)
+            {
+                if (pair.Value.Item2 == true && pair.Key < this.clusterId) return false;
+            }
+            return true;
+        }
+
+        private async Task<bool> sendPrepareMsgs()
+        {
+            this.Logger("Prepare");
+            this.readTS.Item1 = this.readTS.Item1 + 1;
+
+            int majority = (this.paxosNodesCount + 1) / 2; // Assuming the current node is also part of the quorum
+            int receivedPromises = 1; // starts counting with itself
+
+            List<Task<PrepareResponse>> responseTasks = new List<Task<PrepareResponse>>();
+
+            PrepareRequest request = new PrepareRequest
+            {
+                LmId = this.clusterId,
+                RoundId = this.readTS.Item1
+            };
+
+            //  Sends prepare messages to all nodes in the cluster and stores tasks in a list 
+            foreach (KeyValuePair<int, (string, LeaseManagerService.LeaseManagerServiceClient)> pair in this.ids_lmsServices)
+            {
+                Task<PrepareResponse> response = pair.Value.Item2.PrepareAsync(request).ResponseAsync;
+                responseTasks.Add(response);
+            }
+
+            // Loop that awaits for a majority of promises or a nack
+            while (responseTasks.Count > 0)
+            {
+                Task<PrepareResponse> completedTask = await Task.WhenAny(responseTasks);
+                responseTasks.Remove(completedTask);
+
+                PrepareResponse response = await completedTask;
+
+                if (response.Ack)
+                {
+                    // promise contained a higher wts than the current one, update it and also update the value to be proposed
+                    if (response.LastAcceptedRound > this.writeTS.Item1)
+                    {
+                        this.writeTS = (response.LastAcceptedRound, response.LastAcceptedRoundNodeId);
+                        this.lastAcceptedValue = response.LastAcceptedValue.ToList(); // FIXME: value type tbd
+                    }
+                    receivedPromises++;
+                }
+                else
+                {
+                    this.readTS.Item1 = response.LastPromisedRound;
+                    return false;
+                }
+
+                if (receivedPromises >= majority)
+                {
+                    return true;
+                }
+            }
+            return false; // not supposed to reach this
+        }
+
+        private async Task<bool> sendAcceptMsgs()
+        {
+            this.Logger("Accept");
+
+            AcceptRequest request = new AcceptRequest
+            {
+                LmId = this.clusterId,
+                RoundId = this.readTS.Item1,
+                Value = { this.lastAcceptedValue } // FIXME: the value still TBD
+            };
+
+            List<Task<AcceptResponse>> responseTasks = new List<Task<AcceptResponse>>();
+
+            Task<AcceptResponse> responseTask = ownClient.AcceptAsync(request).ResponseAsync;
+
+            responseTasks.Add(responseTask);
+
+            //  Sends prepare messages to all nodes in the cluster and stores tasks in a list to then await each one (not in order)
+            foreach (KeyValuePair<int, (string, LeaseManagerService.LeaseManagerServiceClient)> pair in this.ids_lmsServices)
+            {
+                Task<AcceptResponse> response = pair.Value.Item2.AcceptAsync(request).ResponseAsync;
+                responseTasks.Add(response);
+            }
+
+            while (responseTasks.Count > 0)
+            {
+                Task<AcceptResponse> completedTask = await Task.WhenAny(responseTasks);
+                responseTasks.Remove(completedTask);
+
+                AcceptResponse response = await completedTask;
+
+                if (!response.Ack)
+                {
+                    this.readTS.Item1 = response.LastPromisedRoundId;
+                    return false;
+                }
+            }
+            return true;
+        }
+
+        public void broadcastAcceptedMsg()
+        {
+            this.Logger("Broadcast accepted");
+
+            AcceptedRequest request = new AcceptedRequest
+            {
+                LmId = this.clusterId,
+                RoundId = this.readTS.Item1,
+                Value = { this.lastAcceptedValue }
+            };
+
+            foreach (KeyValuePair<int, (string, LeaseManagerService.LeaseManagerServiceClient)> pair in this.ids_lmsServices)
+            {
+                AcceptedResponse response = pair.Value.Item2.Accepted(request);
+            }
+        }
+
+        public async void propose()
+        {
+            if (await this.sendPrepareMsgs())
+            {
+                if (await this.sendAcceptMsgs() && this.isAcceptedQuorom())
+                    return;
+                else
+                    this.propose();
+            }
+            else
+                this.propose();
+        }
+
+        public void runPaxosInstance()
+        {
+            // TODO: should i send this instance id to other nodes during paxos in case one is stuck in a past instance?
+            this.paxosInstanceId++;
+            while (!this.isDecided())
+            {
+                if (this.isProposer())
+                {
+                    this.propose();
+                }
+                else
+                    Thread.Sleep(1000);
+            }
+            this.readTS = (0, 0);
+            this.writeTS = (0, 0);
+            this.lastAcceptedValue.Clear();
+            this.acceptedReceivedCount = 0;
+            this.setDecided(false);
+            return;
+        }
     }
 }

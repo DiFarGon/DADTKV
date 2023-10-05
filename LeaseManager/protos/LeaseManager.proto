@@ -3,14 +3,75 @@ syntax = "proto3";
 service LeaseManagerService {
     // RPC for exchanging control messages with other lease managers
     rpc ControlLM(ControlLMRequest) returns (ControlLMResponse);
+    
+    // TODO: add rpc for receiving a lease request from a client
+
+    rpc Prepare(PrepareRequest) returns (PrepareResponse);
+    rpc Accept(AcceptRequest) returns (AcceptResponse);
+    // when a node accepts a AcceptRequest, it should send a message to all nodes saying it accepted for round_id the value v 
+    // because if any node receives a majority of these messages (for the same round_id), itconsensus has been achieved for that paxos instance
+    rpc Accepted(AcceptedRequest) returns (AcceptedResponse);
 }
 
 message ControlLMRequest {
     // Unique identifier for the request
-    string lm_id = 1;
+    int32 lm_id = 1;
 }
 
 message ControlLMResponse {
     // Acknowledgment of request reception
-    string lm_id = 1;
+    int32 lm_id = 1;
 }
+
+message PrepareRequest {
+    int32 lm_id = 1;
+    int32 round_id = 2;
+}
+
+// TODO: understand what value should be exactly (list of leases? leases in queue and leases granted(state)?)
+message PrepareResponse {
+    int32 lm_id = 1;
+    int32 round_id = 2; 
+
+    bool ack = 3;
+
+    // only for ack = false
+    int32 last_promised_round = 4; //change name to readTS and the write as awell
+    int32 last_promised_round_node_id = 5;
+
+    // only for ack = true and if this already accepted a value
+    int32 last_accepted_round = 6; 
+    int32 last_accepted_round_node_id = 7;
+    repeated string last_accepted_value = 8; // only for ack = true and if this already accepted a value
+}
+
+message AcceptRequest {
+    int32 lm_id = 1;
+    int32 round_id = 2;
+
+    repeated string value = 3;
+}
+
+message AcceptResponse {
+    int32 lm_id = 1;
+    int32 round_id = 2;
+
+    bool ack = 3;
+    int32 last_promised_round_id = 4; // only for ack = false
+}
+
+message AcceptedRequest {
+    int32 lm_id = 1;
+    int32 round_id = 2;
+
+    repeated string value = 3;
+}
+
+message AcceptedResponse {
+    int32 lm_id = 1;
+    int32 round_id = 2;
+
+    bool ack = 3;
+}
+
+
