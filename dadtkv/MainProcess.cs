@@ -15,6 +15,7 @@ namespace dadtkv
         private int slots;
         private int slotDuration;
         private DateTime startTime;
+        private Func<ProcessInfo> assignTransactionManager;
 
         public MainProcess(bool debug)
         {
@@ -32,10 +33,24 @@ namespace dadtkv
             }
             this.path = path.Substring(0, lastIndex);
 
-
             this.clients = new List<ProcessInfo>();
             this.transactionManagers = new List<ProcessInfo>();
             this.leaseManagers = new List<ProcessInfo>();
+
+            int next = 0;
+
+            this.assignTransactionManager = () => {
+                ProcessInfo transactionManager = this.transactionManagers[next];
+                if (next == this.transactionManagers.Count - 1)
+                {
+                    next = 0;
+                }
+                else
+                {
+                    next += 1;
+                }
+                return transactionManager;
+            };
         }
 
         private void Logger(string message)
@@ -95,9 +110,12 @@ namespace dadtkv
 
         private void launchClient(ProcessInfo client)
         {
+            // <id> <url> <port>? <id> <tms> <startTime> <debug?>
+
             this.Logger($"Creating new client with id '{client.getId()}' and url '{client.getUrl()}'");
             
-            string arguments = $"{client.getId()} {client.getUrl()}";
+            string arguments = $"{client.getId()} {client.getUrl()} {this.assignTransactionManager().getUrl()} {this.getAllTransactionManagersString()} {this.startTime}";
+            if (this.debug) { arguments += " debug"; }
 
             if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
             {
@@ -107,29 +125,20 @@ namespace dadtkv
             // TODO: add multiple console window launching
             else
             {
-                string command = $"run --project {path}/Client/Client.csproj {client.getId()} {client.getUrl()}";
+                string command = $"run --project {path}/Client/Client.csproj {arguments}";
                 Process.Start("dotnet", command);
             }
         }
 
         private void launchTransactionManager(ProcessInfo transactionManager)
         {
-            int clusterId = 0;
-            string clusterNodes = "";
-
-            for (int i = 0; i < this.transactionManagers.Count; i++)
-            {
-                if (this.transactionManagers[i] ==  transactionManager)
-                {
-                    clusterId = i;
-                    continue;
-                }
-                clusterNodes += $"{i}-{this.transactionManagers[i].getId()}-{this.transactionManagers[i].getUrl()}";
-            }
+            // <clusterId> <id> <url> <lms> <tms> <debug?>
 
             this.Logger($"Creating new transaction manager with id '{transactionManager.getId()}' and url '{transactionManager.getUrl()}'");
 
-            string arguments = $"{clusterId} {transactionManager.getId()} {transactionManager.getUrl()} {clusterNodes};";
+            (int clusterId, string clusterNodes) = this.getClusterIdAndTransactionManagersString(transactionManager);
+            string arguments = $"{clusterId} {transactionManager.getId()} {transactionManager.getUrl()} {this.getAllLeaseManagersString()} {clusterNodes}";
+            if (this.debug) { arguments += " debug"; }
 
             if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
             {
@@ -145,33 +154,44 @@ namespace dadtkv
             }
         }
 
-        private void launchLeaseManager(ProcessInfo leaseManager)
+        private string getAllLeaseManagersString()
+        {
+            string leaseManagers = "";
+            for (int i = 0; i < this.leaseManagers.Count; i++)
+            {
+                leaseManagers += $"{i}-{this.leaseManagers[i].getId()}-{this.leaseManagers[i].getUrl()};";
+            }
+            return leaseManagers;  
+        }
+
+        private (int, string) getClusterIdAndTransactionManagersString(ProcessInfo transactionManager)
         {
             int clusterId = 0;
             string clusterNodes = "";
 
-            string tmNodes = "";
-
-            for (int i = 0; i < this.leaseManagers.Count; i++)
+            for (int i = 0; i < this.transactionManagers.Count; i++)
             {
-                if (this.leaseManagers[i] == leaseManager)
+                if (this.transactionManagers[i] ==  transactionManager)
                 {
                     clusterId = i;
                     continue;
                 }
-                clusterNodes += $"{i}-{this.leaseManagers[i].getId()}-{this.leaseManagers[i].getUrl()};";
+                clusterNodes += $"{i}-{this.transactionManagers[i].getId()}-{this.transactionManagers[i].getUrl()};";
             }
 
-            for (int i = 0; i < this.transactionManagers.Count; i++)
-            {
-                tmNodes += $"{i}-{this.transactionManagers[i].getId()}-{this.transactionManagers[i].getUrl()};";
-            }
+            return (clusterId, clusterNodes);
+        }
 
+        private void launchLeaseManager(ProcessInfo leaseManager)
+        {
+            // <clusterId> <id> <url> <port> <lms> <tms> <duration> <startTime> <debug?>
+            
             this.Logger($"Creating new lease manager with id '{leaseManager.getId()}' and url '{leaseManager.getUrl()}'");
 
-            string[] parts = leaseManager.getUrl().Split(':');
+            (int clusterId, string clusterNodes) = this.getClusterIdAndLeaseManagersString(leaseManager);
+            string port = leaseManager.getUrl().Split(':')[2];
 
-            string arguments = $"{clusterId} {leaseManager.getId()} {leaseManager.getUrl()} {parts[2]} {clusterNodes} {tmNodes} {this.slotDuration}";
+            string arguments = $"{clusterId} {leaseManager.getId()} {leaseManager.getUrl()} {port} {clusterNodes} {this.getAllTransactionManagersString()} {this.slotDuration} {this.startTime}";
             if (this.debug) { arguments += " debug"; }
             
             if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows)) 
@@ -186,6 +206,34 @@ namespace dadtkv
                 Process.Start("dotnet", command);
             }
         }
+
+        private (int, string) getClusterIdAndLeaseManagersString(ProcessInfo leaseManager)
+        {
+            int clusterId = 0;
+            string clusterNodes = "";
+
+            for (int i = 0; i < this.leaseManagers.Count; i++)
+            {
+                if (this.leaseManagers[i] == leaseManager)
+                {
+                    clusterId = i;
+                    continue;
+                }
+                clusterNodes += $"{i}-{this.leaseManagers[i].getId()}-{this.leaseManagers[i].getUrl()};";
+            }
+
+            return (clusterId, clusterNodes);
+        }
+        
+        private string getAllTransactionManagersString()
+        {
+            string transactionManagers = "";
+            for (int i = 0; i < this.transactionManagers.Count; i++)
+            {
+                transactionManagers += $"{i}-{this.transactionManagers[i].getId()}-{this.transactionManagers[i].getUrl()};";
+            }
+            return transactionManagers;
+        } 
 
         public void launchProcesses()
         {
