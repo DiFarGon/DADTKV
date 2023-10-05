@@ -14,7 +14,7 @@ namespace dadtkv
         private List<ProcessInfo> leaseManagers;
         private int slots;
         private int slotDuration;
-        private DateTime startTime;
+        private string startTime = "";
         private Func<ProcessInfo> assignTransactionManager;
 
         public MainProcess(bool debug)
@@ -98,8 +98,7 @@ namespace dadtkv
 
         internal void handleT(string line)
         {
-            string format = "hh:mm:ss";
-            this.startTime = DateTime.ParseExact(line.Split(' ')[1], format, null, DateTimeStyles.None);
+            this.startTime = line.Split(' ')[1];
             this.Logger($"Test starts at {this.startTime}");
         }
 
