@@ -9,20 +9,20 @@ namespace LeaseManager
 
         public static void Main(string[] args)
         {
-            // <run> <clusterId> <id> <url> <port> <lms> <tms> <time_between_paxos_instances> <debug?>
+            // <run> <clusterId> <id> <url> <port> <lms> <tms> <time_between_paxos_instances> <start_time> <debug?>
             // TODO: check args? 
 
-            if (args.Length < 7 || args.Length > 8)
+            if (args.Length < 8 || args.Length > 9)
             {
                 Console.WriteLine("Wrong number of arguments");
                 return;
             }
 
             bool debug = false;
-            if (args.Length == 8 && args[7] == "debug")
+            if (args.Length == 9 && args[8] == "debug")
                 debug = true;
 
-            LeaseManager leaseManager = new LeaseManager(int.Parse(args[0]), args[1], args[2], debug);
+            LeaseManager leaseManager = new LeaseManager(int.Parse(args[0]), args[1], args[2], args[7], debug);
 
             Server server = new Server
             {

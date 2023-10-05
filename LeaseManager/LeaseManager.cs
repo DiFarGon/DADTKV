@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Dynamic;
+using System.Globalization;
 using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Text;
@@ -17,6 +18,7 @@ namespace LeaseManager
         private string id;
         private string url;
         private bool debug;
+        private DateTime startTime;
 
         private Dictionary<int, (DateTime, bool)> nodeIds_lastHeartbeat = new Dictionary<int, (DateTime, bool)>(); // used for detecting failures, item2 of the value is to keep track of the respective node's state (suspected down or not)
 
@@ -54,12 +56,14 @@ namespace LeaseManager
         // and then remove the released lease from the list of conflicting leases of the lease in queue and check if the list is empty.
 
 
-        public LeaseManager(int clusterId, string id, string url, bool debugMode)
+        public LeaseManager(int clusterId, string id, string url, string startTime, bool debugMode)
         {
             this.clusterId = clusterId;
             this.id = id;
             this.url = url;
             this.debug = debugMode;
+            this.startTime = DateTime.ParseExact(startTime, "hh:mm:ss", null, DateTimeStyles.None);
+
 
             GrpcChannel channel = GrpcChannel.ForAddress(url);
             this.ownClient = new LeaseManagerService.LeaseManagerServiceClient(channel);
@@ -215,11 +219,14 @@ namespace LeaseManager
                     }
                 }
 
-                Task<ControlLMResponse> completedTask = await Task.WhenAny(responseTasks);
-                responseTasks.Remove(completedTask);
+                if (responseTasks.Count != 0)
+                {
+                    Task<ControlLMResponse> completedTask = await Task.WhenAny(responseTasks);
+                    responseTasks.Remove(completedTask);
 
-                ControlLMResponse response = await completedTask;
-                nodeIds_lastHeartbeat[response.LmId] = (DateTime.Now, nodeIds_lastHeartbeat[response.LmId].Item2);
+                    ControlLMResponse response = await completedTask;
+                    nodeIds_lastHeartbeat[response.LmId] = (DateTime.Now, nodeIds_lastHeartbeat[response.LmId].Item2);
+                }
             }
         }
 
