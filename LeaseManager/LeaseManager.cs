@@ -18,7 +18,9 @@ namespace LeaseManager
         private string url;
         private bool debug;
 
-        // private Dictionary<int, (DateTime, bool)> nodeIds_lastHeartbeat = new Dictionary<int, (DateTime, bool)>(); // used for detecting failures or msgs delays, item2 of the value is to keep track of the respective node's state (suspected or not)
+        private Dictionary<int, (DateTime, bool)> nodeIds_lastHeartbeat = new Dictionary<int, (DateTime, bool)>(); // used for detecting failures, item2 of the value is to keep track of the respective node's state (suspected down or not)
+
+        private LeaseManagerService.LeaseManagerServiceClient ownClient; // client that is this server to send accept msgs to himself so that a majority includes himself
 
         private int paxosNodesCount = 1;
         private Dictionary<int, (string, LeaseManagerService.LeaseManagerServiceClient)> ids_lmsServices =
@@ -27,10 +29,11 @@ namespace LeaseManager
         private (int, int) readTS = (0, 0); // (roundId, nodeId)
         private (int, int) writeTS = (0, 0); // (roundId, nodeId)
         private List<string> lastAcceptedValue = new List<string>();
-        private int promisesReceivedCount = 0;
         private int acceptedReceivedCount = 0;
         private bool proposer = false;
-        private bool idle = true;
+        private bool decided = false;
+
+        private int paxosInstanceId = 0;
 
         private Dictionary<int, (string, TransactionManagerService.TransactionManagerServiceClient)> ids_tmsServices =
             new Dictionary<int, (string, TransactionManagerService.TransactionManagerServiceClient)>();
@@ -58,6 +61,9 @@ namespace LeaseManager
             this.url = url;
             this.debug = debugMode;
 
+            GrpcChannel channel = GrpcChannel.ForAddress(url);
+            this.ownClient = new LeaseManagerService.LeaseManagerServiceClient(channel);
+
             // TODO: no taking into account the fact that the leader might change due to timeouts
             if (clusterId == 0) this.proposer = true;
 
@@ -69,21 +75,19 @@ namespace LeaseManager
             if (this.debug) Console.WriteLine($"(TimeStamp: {DateTime.UtcNow}): [ LM {this.id} (P{this.clusterId}) ]\t" + message + '\n');
         }
 
-        public bool isIdle() { return this.idle; }
-
         public bool isProposer() { return this.proposer; }
 
-        public int getClusterId() { return this.clusterId; }
+        public bool isDecided() { return this.decided; }
 
-        public string getId() { return this.id; }
+        public bool setDecided(bool value) { return this.decided = value; }
+
+        public int getClusterId() { return this.clusterId; }
 
         public (int, int) getReadTS() { return this.readTS; }
 
         public (int, int) getWriteTS() { return this.writeTS; }
 
         public List<string> getLastAcceptedValue() { return this.lastAcceptedValue; }
-
-        public int getPromisesReceivedCount() { return this.promisesReceivedCount; }
 
         public int getAcceptedReceivedCount() { return this.acceptedReceivedCount; }
 
@@ -108,6 +112,8 @@ namespace LeaseManager
                 GrpcChannel channel = GrpcChannel.ForAddress(url);
                 LeaseManagerService.LeaseManagerServiceClient client = new LeaseManagerService.LeaseManagerServiceClient(channel);
                 this.ids_lmsServices[n] = (id, client);
+
+                this.nodeIds_lastHeartbeat[n] = (DateTime.Now, true);
 
                 this.paxosNodesCount++;
             }
@@ -178,27 +184,70 @@ namespace LeaseManager
             this.queue_grntdConflicts[blockedLease].Remove(releasedLease);
         }
 
-        // TODO: should i seperate the incrementation from the checking if quorom?
-        public bool incPromiseCountCheckIfQuorom()
+        public void incAcceptedCount() { this.acceptedReceivedCount++; }
+
+        public bool isAcceptedQuorom() { return this.acceptedReceivedCount > this.paxosNodesCount / 2; }
+
+        public async Task failureDetectorAsync(int controlMsgsInterval, int timeout)
         {
-            this.promisesReceivedCount++;
-            return this.promisesReceivedCount > this.paxosNodesCount / 2;
+            Thread checkHeartbeatsThread = new Thread(async () => await this.checkHeartbeatsAsync(timeout));
+            checkHeartbeatsThread.Start();
+
+            DateTime lastHeartbeat = DateTime.Now;
+            List<Task<ControlLMResponse>> responseTasks = new List<Task<ControlLMResponse>>();
+
+            while (true)
+            {
+                if (DateTime.Now - lastHeartbeat > TimeSpan.FromSeconds(controlMsgsInterval))
+                {
+                    responseTasks.Clear();
+                    ControlLMRequest request = new ControlLMRequest
+                    {
+                        LmId = this.clusterId
+                    };
+
+                    foreach (KeyValuePair<int, (string, LeaseManagerService.LeaseManagerServiceClient)> keyValuePair in this.ids_lmsServices)
+                    {
+                        Task<ControlLMResponse> res = keyValuePair.Value.Item2.ControlLMAsync(request).ResponseAsync;
+                        responseTasks.Add(res);
+
+                        this.nodeIds_lastHeartbeat[keyValuePair.Key] = (DateTime.Now, nodeIds_lastHeartbeat[keyValuePair.Key].Item2);
+                    }
+                }
+
+                Task<ControlLMResponse> completedTask = await Task.WhenAny(responseTasks);
+                responseTasks.Remove(completedTask);
+
+                ControlLMResponse response = await completedTask;
+                nodeIds_lastHeartbeat[response.LmId] = (DateTime.Now, nodeIds_lastHeartbeat[response.LmId].Item2);
+            }
         }
 
-        // TODO: should i seperate the incrementation from the checking if quorom?
-        public bool incAcceptedCountCheckIfQuorom()
+        private Task checkHeartbeatsAsync(int timeout)
         {
-            this.acceptedReceivedCount++;
-            return this.acceptedReceivedCount > this.paxosNodesCount / 2;
+            while (true)
+            {
+                lock (this.nodeIds_lastHeartbeat)
+                {
+                    foreach (KeyValuePair<int, (DateTime, bool)> pair in this.nodeIds_lastHeartbeat)
+                    {
+                        if (DateTime.Now - pair.Value.Item1 > TimeSpan.FromSeconds(timeout)) this.nodeIds_lastHeartbeat[pair.Key] = (pair.Value.Item1, false);
+                        else this.nodeIds_lastHeartbeat[pair.Key] = (pair.Value.Item1, true);
+                    }
+                }
+                if (this.isLowestNodeAlive()) this.proposer = true;
+                else this.proposer = false;
+                Thread.Sleep(timeout);
+            }
         }
 
-        public void resetPaxosInstance()
+        private bool isLowestNodeAlive()
         {
-            this.promisesReceivedCount = 0;
-            this.acceptedReceivedCount = 0;
-            // this.readTS = (0, 0);
-            // this.writeTS = (0, 0);
-
+            foreach (KeyValuePair<int, (DateTime, bool)> pair in this.nodeIds_lastHeartbeat)
+            {
+                if (pair.Value.Item2 == true && pair.Key < this.clusterId) return false;
+            }
+            return true;
         }
 
         private async Task<bool> sendPrepareMsgs()
@@ -207,7 +256,7 @@ namespace LeaseManager
             this.readTS.Item1 = this.readTS.Item1 + 1;
 
             int majority = (this.paxosNodesCount + 1) / 2; // Assuming the current node is also part of the quorum
-            int receivedPromises = 1;
+            int receivedPromises = 1; // starts counting with itself
 
             List<Task<PrepareResponse>> responseTasks = new List<Task<PrepareResponse>>();
 
@@ -217,7 +266,7 @@ namespace LeaseManager
                 RoundId = this.readTS.Item1
             };
 
-            //  Sends prepare messages to all nodes in the cluster and stores tasks in a list to then await each one (not in order)
+            //  Sends prepare messages to all nodes in the cluster and stores tasks in a list 
             foreach (KeyValuePair<int, (string, LeaseManagerService.LeaseManagerServiceClient)> pair in this.ids_lmsServices)
             {
                 Task<PrepareResponse> response = pair.Value.Item2.PrepareAsync(request).ResponseAsync;
@@ -225,7 +274,7 @@ namespace LeaseManager
             }
 
             // Loop that awaits for a majority of promises or a nack
-            while (true)
+            while (responseTasks.Count > 0)
             {
                 Task<PrepareResponse> completedTask = await Task.WhenAny(responseTasks);
                 responseTasks.Remove(completedTask);
@@ -234,6 +283,7 @@ namespace LeaseManager
 
                 if (response.Ack)
                 {
+                    // promise contained a higher wts than the current one, update it and also update the value to be proposed
                     if (response.LastAcceptedRound > this.writeTS.Item1)
                     {
                         this.writeTS = (response.LastAcceptedRound, response.LastAcceptedRoundNodeId);
@@ -244,7 +294,7 @@ namespace LeaseManager
                 else
                 {
                     this.readTS.Item1 = response.LastPromisedRound;
-                    return await this.sendPrepareMsgs();
+                    return false;
                 }
 
                 if (receivedPromises >= majority)
@@ -252,9 +302,10 @@ namespace LeaseManager
                     return true;
                 }
             }
+            return false; // not supposed to reach this
         }
 
-        private void sendAcceptMsgs()
+        private async Task<bool> sendAcceptMsgs()
         {
             this.Logger("Accept");
 
@@ -262,14 +313,36 @@ namespace LeaseManager
             {
                 LmId = this.clusterId,
                 RoundId = this.readTS.Item1,
-                Value = { this.lastAcceptedValue }
+                Value = { this.lastAcceptedValue } // FIXME: the value still TBD
             };
+
+            List<Task<AcceptResponse>> responseTasks = new List<Task<AcceptResponse>>();
+
+            Task<AcceptResponse> responseTask = ownClient.AcceptAsync(request).ResponseAsync;
+
+            responseTasks.Add(responseTask);
 
             //  Sends prepare messages to all nodes in the cluster and stores tasks in a list to then await each one (not in order)
             foreach (KeyValuePair<int, (string, LeaseManagerService.LeaseManagerServiceClient)> pair in this.ids_lmsServices)
             {
                 Task<AcceptResponse> response = pair.Value.Item2.AcceptAsync(request).ResponseAsync;
+                responseTasks.Add(response);
             }
+
+            while (responseTasks.Count > 0)
+            {
+                Task<AcceptResponse> completedTask = await Task.WhenAny(responseTasks);
+                responseTasks.Remove(completedTask);
+
+                AcceptResponse response = await completedTask;
+
+                if (!response.Ack)
+                {
+                    this.readTS.Item1 = response.LastPromisedRoundId;
+                    return false;
+                }
+            }
+            return true;
         }
 
         public void broadcastAcceptedMsg()
@@ -291,35 +364,36 @@ namespace LeaseManager
 
         public async void propose()
         {
-            this.Logger("initiate propose");
-
-            bool prepareResult = await this.sendPrepareMsgs();
-
-            if (prepareResult == true) this.sendAcceptMsgs();
-
-            else
+            if (await this.sendPrepareMsgs())
             {
-                // TODO: if prepare fails it means that another node started 
+                if (await this.sendAcceptMsgs() && this.isAcceptedQuorom())
+                    return;
+                else
+                    this.propose();
             }
-
-
-
+            else
+                this.propose();
         }
 
-        // internal void setLastHearbeat(int nodeId)
-        // {
-        //     this.nodeIds_lastHeartbeat[nodeId] = DateTime.Now;
-        // }
-
-        // internal void checkHeartbeats(TimeSpan interval)
-        // {
-        //     while (true)
-        //     {
-        //         foreach (KeyValuePair<int, (DateTime, bool)> pair in this.nodeIds_lastHeartbeat)
-        //         {
-        //             if (DateTime.Now - pair.Value.Item1 > interval) this.nodeIds_lastHeartbeat[pair.Key] = (pair.Value.Item1, true);
-        //         }
-        //     }
-        // }
+        public void runPaxosInstance()
+        {
+            // TODO: should i send this instance id to other nodes during paxos in case one is stuck in a past instance?
+            this.paxosInstanceId++;
+            while (!this.isDecided())
+            {
+                if (this.isProposer())
+                {
+                    this.propose();
+                }
+                else
+                    Thread.Sleep(1000);
+            }
+            this.readTS = (0, 0);
+            this.writeTS = (0, 0);
+            this.lastAcceptedValue.Clear();
+            this.acceptedReceivedCount = 0;
+            this.setDecided(false);
+            return;
+        }
     }
 }

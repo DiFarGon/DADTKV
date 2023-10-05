@@ -57,7 +57,7 @@ message AcceptResponse {
     int32 round_id = 2;
 
     bool ack = 3;
-    // int32 last_promised_round_id = 4; // only for ack = false
+    int32 last_promised_round_id = 4; // only for ack = false
 }
 
 message AcceptedRequest {

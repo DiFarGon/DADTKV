@@ -80,19 +80,18 @@ namespace LeaseManager
 
                 leaseManager.Logger($"Accept request received from {senderId}");
 
-                // accept msg received refers to a round in the past of this lm, send nack
-                // FIXME: question about this condition in questions folder: "Q1.png"
                 if (acceptRound < readTS.Item1 || (acceptRound == readTS.Item1 && senderId < readTS.Item2))
                 {
                     leaseManager.Logger($"Accept request refused from {senderId}, acceptRound ({acceptRound}) < readTS {readTS}");
                     response.Ack = false;
+                    response.LastPromisedRoundId = readTS.Item1;
                 }
                 else
                 {
                     leaseManager.Logger($"Accept request accepted from {senderId}, acceptRound ({acceptRound}) > readTS {readTS}");
                     leaseManager.setLastAcceptedRound(acceptRound, senderId);
 
-                    // FIXME: this value will change
+                    // FIXME: the value is still TBD, what should it be?
                     leaseManager.setLastAcceptedValue(request.Value.ToList());
 
                     leaseManager.broadcastAcceptedMsg();
@@ -124,17 +123,19 @@ namespace LeaseManager
                 }
                 else
                 {
-                    if (leaseManager.incAcceptedCountCheckIfQuorom())
+                    response.Ack = true;
+                    leaseManager.incAcceptedCount();
+                    if (leaseManager.isAcceptedQuorom())
                     {
                         leaseManager.Logger($"Accepted request accepted from {request.LmId}, acceptedRoundId ({acceptedRound}), received a quorum of accepted so, consensus reached!");
-                        response.Ack = true;
+                        leaseManager.setDecided(true);
                         // FIXME: what does a LM do when it knows a consensus has been reached? Eventually sends the decision to the TMs right?
                         // FIXME: continue here, send decision to TMS!
                     }
                     else
                     {
                         leaseManager.Logger($"Accepted request accepted from {request.LmId}, acceptedRoundId ({acceptedRound}), has received {leaseManager.getAcceptedReceivedCount()} accepteds so far");
-                        response.Ack = true;
+
                     }
                 }
             }
