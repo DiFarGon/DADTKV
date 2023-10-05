@@ -9,18 +9,20 @@ namespace TransactionManager
 {
     internal class TransactionManager
     {
+        private int clusterId;
         private string id;
         private string url;
-        private bool debug = true;
+        private bool debug;
 
 
-        public TransactionManager(string id, string url)
+        public TransactionManager(int clusterId, string id, string url, bool debug)
         {
+            this.clusterId = clusterId;
             this.id = id;
             this.url = url;
+            this.debug = debug;
 
             this.Logger("created");
-
         }
 
         private void Logger(string message)
