@@ -132,12 +132,13 @@ namespace dadtkv
 
         private void launchTransactionManager(ProcessInfo transactionManager)
         {
-            // <clusterId> <id> <url> <port> <lms> <tms> <duration> <debug?>
+            // <clusterId> <id> <url> <lms> <tms> <debug?>
 
             this.Logger($"Creating new transaction manager with id '{transactionManager.getId()}' and url '{transactionManager.getUrl()}'");
 
             (int clusterId, string clusterNodes) = this.getClusterIdAndTransactionManagersString(transactionManager);
-            string arguments = $"{clusterId} {transactionManager.getId()} {transactionManager.getUrl()} {clusterNodes};";
+            string arguments = $"{clusterId} {transactionManager.getId()} {transactionManager.getUrl()} {this.getAllLeaseManagersString()} {clusterNodes}";
+            if (this.debug) { arguments += " debug"; }
 
             if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
             {
@@ -153,6 +154,16 @@ namespace dadtkv
             }
         }
 
+        private string getAllLeaseManagersString()
+        {
+            string leaseManagers = "";
+            for (int i = 0; i < this.leaseManagers.Count; i++)
+            {
+                leaseManagers += $"{i}-{this.leaseManagers[i].getId()}-{this.leaseManagers[i].getUrl()};";
+            }
+            return leaseManagers;  
+        }
+
         private (int, string) getClusterIdAndTransactionManagersString(ProcessInfo transactionManager)
         {
             int clusterId = 0;
@@ -165,7 +176,7 @@ namespace dadtkv
                     clusterId = i;
                     continue;
                 }
-                clusterNodes += $"{i}-{this.transactionManagers[i].getId()}-{this.transactionManagers[i].getUrl()}";
+                clusterNodes += $"{i}-{this.transactionManagers[i].getId()}-{this.transactionManagers[i].getUrl()};";
             }
 
             return (clusterId, clusterNodes);
@@ -173,14 +184,14 @@ namespace dadtkv
 
         private void launchLeaseManager(ProcessInfo leaseManager)
         {
-            // <clusterId> <id> <url> <port> <lms> <tms> <duration> <debug?>
+            // <clusterId> <id> <url> <port> <lms> <tms> <duration> <startTime> <debug?>
             
             this.Logger($"Creating new lease manager with id '{leaseManager.getId()}' and url '{leaseManager.getUrl()}'");
 
             (int clusterId, string clusterNodes) = this.getClusterIdAndLeaseManagersString(leaseManager);
             string port = leaseManager.getUrl().Split(':')[2];
 
-            string arguments = $"{clusterId} {leaseManager.getId()} {leaseManager.getUrl()} {port} {clusterNodes} {this.getAllTransactionManagersString()} {this.slotDuration}";
+            string arguments = $"{clusterId} {leaseManager.getId()} {leaseManager.getUrl()} {port} {clusterNodes} {this.getAllTransactionManagersString()} {this.slotDuration} {this.startTime}";
             if (this.debug) { arguments += " debug"; }
             
             if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows)) 
