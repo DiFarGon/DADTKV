@@ -114,21 +114,9 @@ namespace dadtkv
 
         private void launchTransactionManager(ProcessInfo transactionManager)
         {
-            int clusterId = 0;
-            string clusterNodes = "";
-
-            for (int i = 0; i < this.transactionManagers.Count; i++)
-            {
-                if (this.transactionManagers[i] ==  transactionManager)
-                {
-                    clusterId = i;
-                    continue;
-                }
-                clusterNodes += $"{i}-{this.transactionManagers[i].getId()}-{this.transactionManagers[i].getUrl()}";
-            }
-
             this.Logger($"Creating new transaction manager with id '{transactionManager.getId()}' and url '{transactionManager.getUrl()}'");
 
+            (int clusterId, string clusterNodes) = this.getClusterIdAndTransactionManagersString(transactionManager);
             string arguments = $"{clusterId} {transactionManager.getId()} {transactionManager.getUrl()} {clusterNodes};";
 
             if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
@@ -145,33 +133,32 @@ namespace dadtkv
             }
         }
 
-        private void launchLeaseManager(ProcessInfo leaseManager)
+        private (int, string) getClusterIdAndTransactionManagersString(ProcessInfo transactionManager)
         {
             int clusterId = 0;
             string clusterNodes = "";
 
-            string tmNodes = "";
-
-            for (int i = 0; i < this.leaseManagers.Count; i++)
+            for (int i = 0; i < this.transactionManagers.Count; i++)
             {
-                if (this.leaseManagers[i] == leaseManager)
+                if (this.transactionManagers[i] ==  transactionManager)
                 {
                     clusterId = i;
                     continue;
                 }
-                clusterNodes += $"{i}-{this.leaseManagers[i].getId()}-{this.leaseManagers[i].getUrl()};";
+                clusterNodes += $"{i}-{this.transactionManagers[i].getId()}-{this.transactionManagers[i].getUrl()}";
             }
 
-            for (int i = 0; i < this.transactionManagers.Count; i++)
-            {
-                tmNodes += $"{i}-{this.transactionManagers[i].getId()}-{this.transactionManagers[i].getUrl()};";
-            }
+            return (clusterId, clusterNodes);
+        }
 
+        private void launchLeaseManager(ProcessInfo leaseManager)
+        {
             this.Logger($"Creating new lease manager with id '{leaseManager.getId()}' and url '{leaseManager.getUrl()}'");
 
-            string[] parts = leaseManager.getUrl().Split(':');
+            (int clusterId, string clusterNodes) = this.getClusterIdAndLeaseManagersString(leaseManager);
+            string port = leaseManager.getUrl().Split(':')[2];
 
-            string arguments = $"{clusterId} {leaseManager.getId()} {leaseManager.getUrl()} {parts[2]} {clusterNodes} {tmNodes} {this.slotDuration}";
+            string arguments = $"{clusterId} {leaseManager.getId()} {leaseManager.getUrl()} {port} {clusterNodes} {this.getAllTransactionManagersString()} {this.slotDuration}";
             if (this.debug) { arguments += " debug"; }
             
             if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows)) 
@@ -186,6 +173,34 @@ namespace dadtkv
                 Process.Start("dotnet", command);
             }
         }
+
+        private (int, string) getClusterIdAndLeaseManagersString(ProcessInfo leaseManager)
+        {
+            int clusterId = 0;
+            string clusterNodes = "";
+
+            for (int i = 0; i < this.leaseManagers.Count; i++)
+            {
+                if (this.leaseManagers[i] == leaseManager)
+                {
+                    clusterId = i;
+                    continue;
+                }
+                clusterNodes += $"{i}-{this.leaseManagers[i].getId()}-{this.leaseManagers[i].getUrl()};";
+            }
+
+            return (clusterId, clusterNodes);
+        }
+        
+        private string getAllTransactionManagersString()
+        {
+            string transactionManagers = "";
+            for (int i = 0; i < this.transactionManagers.Count; i++)
+            {
+                transactionManagers += $"{i}-{this.transactionManagers[i].getId()}-{this.transactionManagers[i].getUrl()};";
+            }
+            return transactionManagers;
+        } 
 
         public void launchProcesses()
         {
