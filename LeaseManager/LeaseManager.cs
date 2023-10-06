@@ -41,7 +41,7 @@ namespace LeaseManager
             new Dictionary<int, (string, TransactionManagerService.TransactionManagerServiceClient)>();
 
         // lease have this fromat: "tmId-dataKey1;dataKey2;dataKey3;"
-        private Dictionary<string, string> granted_rqstdConflicts = new Dictionary<string, string>(); // key is a granted lease, value is a the lease in queue that conflicts with it ; TODO: maybe could have multiple values?
+        private Dictionary<string, List<string>> granted_rqstdConflicts = new Dictionary<string, List<string>>(); // key is a granted lease, value is a the lease in queue that conflicts with it ; TODO: maybe could have multiple values?
         private Dictionary<string, List<string>> queue_grntdConflicts = new Dictionary<string, List<string>>(); // key is a lease in queue, value is a list of granted leases that conflict with it
         // this was, in my opinion, the best way to do it.
         //  - for a data key request i check if it conflicts with any of the keys in granted_rqstdConflicts
@@ -104,7 +104,7 @@ namespace LeaseManager
 
         public void setPaxosClusterNodes(string lms)
         {
-            string[] keyValuePairs = lms.Split(';', StringSplitOptions.RemoveEmptyEntries);
+            string[] keyValuePairs = lms.Split('!', StringSplitOptions.RemoveEmptyEntries);
 
             foreach (string pair in keyValuePairs)
             {
@@ -126,10 +126,13 @@ namespace LeaseManager
 
         public void setTmClusterNodes(string tms)
         {
-            string[] keyValuePairs = tms.Split(';', StringSplitOptions.RemoveEmptyEntries);
+            string[] keyValuePairs = tms.Split('!', StringSplitOptions.RemoveEmptyEntries);
 
+            int count = 0;
             foreach (string pair in keyValuePairs)
             {
+                count++;
+
                 string[] parts = pair.Split('-');
                 int n = int.Parse(parts[0]);
                 string id = parts[1];
@@ -139,7 +142,7 @@ namespace LeaseManager
                 TransactionManagerService.TransactionManagerServiceClient client = new TransactionManagerService.TransactionManagerServiceClient(channel);
                 this.ids_tmsServices[n] = (id, client);
             }
-            this.Logger("set lease managers");
+            this.Logger($"set transaction managers, cluster with {count} nodes");
         }
 
         static public string parseLease(string tmId, List<string> dataKeys)
@@ -152,40 +155,77 @@ namespace LeaseManager
             return lease;
         }
 
+        private List<string> findGrantedConflicts(List<string> dataKeys)
+        {
+            List<string> conflicts = new List<string>();
+            foreach (string key in dataKeys)
+            {
+                foreach (KeyValuePair<string, List<string>> pair in this.granted_rqstdConflicts)
+                {
+                    if (pair.Key.Contains(key) && !conflicts.Contains(pair.Key)) conflicts.Add(pair.Key);
+                }
+            }
+            return conflicts;
+        }
+
         public void addLeaseToQueue(string tmId, List<string> dataKeys)
-        //  FIXME: not doing any checks on the lease, should i?
         {
             string newLease = parseLease(tmId, dataKeys);
             this.queue_grntdConflicts[newLease] = new List<string>();
 
-            foreach (KeyValuePair<string, string> pair in this.granted_rqstdConflicts)
+            List<string> conflicts = findGrantedConflicts(dataKeys);
+
+            if (conflicts.Count != 0)
             {
-                if (newLease == pair.Key)
+                this.queue_grntdConflicts[newLease].AddRange(conflicts);
+                foreach (string conflict in conflicts)
                 {
-                    this.granted_rqstdConflicts[pair.Key] = newLease;
-                    this.queue_grntdConflicts[newLease].Add(pair.Key);
+                    this.granted_rqstdConflicts[conflict].Add(newLease);
                 }
             }
         }
 
+        private List<string> findQueueConflicts(List<string> dataKeys)
+        {
+            List<string> conflicts = new List<string>();
+            foreach (string key in dataKeys)
+            {
+                foreach (KeyValuePair<string, List<string>> pair in this.queue_grntdConflicts)
+                {
+                    if (pair.Key.Contains(key) && !conflicts.Contains(pair.Key)) conflicts.Add(pair.Key);
+                }
+            }
+            return conflicts;
+        }
+
         public void moveLeaseQueueToGranted(string tmId, List<string> dataKeys)
-        //  FIXME: not doing any checks on the lease, should i?
         {
             string newLease = parseLease(tmId, dataKeys);
 
-            this.queue_grntdConflicts.Remove(newLease);
-            this.granted_rqstdConflicts[newLease] = "";
+            List<string> conflicts = findQueueConflicts(dataKeys);
+
+            if (conflicts.Count != 0)
+            {
+                this.granted_rqstdConflicts[newLease] = new List<string>();
+                this.granted_rqstdConflicts[newLease].AddRange(conflicts);
+                foreach (string conflict in conflicts)
+                {
+                    this.queue_grntdConflicts[conflict].Remove(newLease);
+                }
+            }
         }
 
         public void releaseLease(string tmId, List<string> dataKeys)
-        //  FIXME: not doing any checks on the lease, should i?
         {
             string releasedLease = parseLease(tmId, dataKeys);
 
-            string blockedLease = this.granted_rqstdConflicts[releasedLease];
+            List<string> blockedInQueue = this.granted_rqstdConflicts[releasedLease];
             this.granted_rqstdConflicts.Remove(releasedLease);
 
-            this.queue_grntdConflicts[blockedLease].Remove(releasedLease);
+            foreach (string blockedLease in blockedInQueue)
+            {
+                this.queue_grntdConflicts[blockedLease].Remove(releasedLease);
+            }
         }
 
         public void incAcceptedCount() { this.acceptedReceivedCount++; }

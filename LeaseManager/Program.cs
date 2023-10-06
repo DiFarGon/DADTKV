@@ -12,6 +12,11 @@ namespace LeaseManager
             // <run> <clusterId> <id> <url> <port> <lms> <tms> <time_between_paxos_instances> <start_time> <debug?>
             // TODO: check args? 
 
+            foreach (string arg in args)
+            {
+                Console.WriteLine(arg);
+            }
+
             if (args.Length < 8 || args.Length > 9)
             {
                 Console.WriteLine("Wrong number of arguments");
@@ -36,8 +41,10 @@ namespace LeaseManager
             leaseManager.setPaxosClusterNodes(args[4]);
             leaseManager.setTmClusterNodes(args[5]);
 
-            Thread controlThread = new Thread(async () => await leaseManager.failureDetectorAsync(controlMessagesInterval, failureDetectorTimeout));
-            controlThread.Start();
+            // Thread controlThread = new Thread(async () => await leaseManager.failureDetectorAsync(controlMessagesInterval, failureDetectorTimeout));
+            // controlThread.Start();
+
+            DateTime beggining = DateTime.Now;
 
             DateTime lastPaxosInstance = DateTime.Now;
             //  TODO: initiate paxos instance, call it taking into account the time between paxos instances and the timeouts suspecting the proposer
@@ -50,8 +57,9 @@ namespace LeaseManager
                     // FIXME: send decided value to LM
                 }
                 lastPaxosInstance = DateTime.Now;
+                if (DateTime.Now - beggining > TimeSpan.FromSeconds(30))
+                    break;
             }
-
         }
     }
 }

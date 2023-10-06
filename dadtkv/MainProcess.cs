@@ -39,7 +39,8 @@ namespace dadtkv
 
             int next = 0;
 
-            this.assignTransactionManager = () => {
+            this.assignTransactionManager = () =>
+            {
                 ProcessInfo transactionManager = this.transactionManagers[next];
                 if (next == this.transactionManagers.Count - 1)
                 {
@@ -72,7 +73,8 @@ namespace dadtkv
             {
                 url = tokens[3];
             }
-            else {  // for now let's just run everything on the same machine
+            else
+            {  // for now let's just run everything on the same machine
                 int port = new Uri(tokens[3]).Port;
                 url = $"http://localhost:{port}";
             }
@@ -121,7 +123,7 @@ namespace dadtkv
             // <id> <url> <port>? <id> <tms> <startTime> <debug?>
 
             this.Logger($"Creating new client with id '{client.getId()}' and url '{client.getUrl()}'");
-            
+
             string arguments = $"{client.getId()} {client.getUrl()} {this.assignTransactionManager().getUrl()} {this.getAllTransactionManagersString()} {this.startTime}";
             if (this.debug) { arguments += " debug"; }
 
@@ -156,8 +158,8 @@ namespace dadtkv
             // TODO: add multiple console window launching
             else
             {
-                string command = $"run --project {path}/TransactionManager/TransactionManager.csproj {arguments}";
-                Process.Start("dotnet", command);
+                string command = $"dotnet run --project {path}/TransactionManager/TransactionManager.csproj {arguments}";
+                Process.Start("gnome-terminal", $"-- bash -c \"{command}; exec bash\"");
 
             }
         }
@@ -167,9 +169,9 @@ namespace dadtkv
             string leaseManagers = "";
             for (int i = 0; i < this.leaseManagers.Count; i++)
             {
-                leaseManagers += $"{i}-{this.leaseManagers[i].getId()}-{this.leaseManagers[i].getUrl()};";
+                leaseManagers += $"{i}-{this.leaseManagers[i].getId()}-{this.leaseManagers[i].getUrl()}!";
             }
-            return leaseManagers;  
+            return leaseManagers;
         }
 
         private (int, string) getClusterIdAndTransactionManagersString(ProcessInfo transactionManager)
@@ -179,12 +181,12 @@ namespace dadtkv
 
             for (int i = 0; i < this.transactionManagers.Count; i++)
             {
-                if (this.transactionManagers[i] ==  transactionManager)
+                if (this.transactionManagers[i] == transactionManager)
                 {
                     clusterId = i;
                     continue;
                 }
-                clusterNodes += $"{i}-{this.transactionManagers[i].getId()}-{this.transactionManagers[i].getUrl()};";
+                clusterNodes += $"{i}-{this.transactionManagers[i].getId()}-{this.transactionManagers[i].getUrl()}!";
             }
 
             return (clusterId, clusterNodes);
@@ -193,7 +195,7 @@ namespace dadtkv
         private void launchLeaseManager(ProcessInfo leaseManager)
         {
             // <clusterId> <id> <url> <port> <lms> <tms> <duration> <startTime> <debug?>
-            
+
             this.Logger($"Creating new lease manager with id '{leaseManager.getId()}' and url '{leaseManager.getUrl()}'");
 
             (int clusterId, string clusterNodes) = this.getClusterIdAndLeaseManagersString(leaseManager);
@@ -201,17 +203,17 @@ namespace dadtkv
 
             string arguments = $"{clusterId} {leaseManager.getId()} {leaseManager.getUrl()} {port} {clusterNodes} {this.getAllTransactionManagersString()} {this.slotDuration} {this.startTime}";
             if (this.debug) { arguments += " debug"; }
-            
-            if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows)) 
+
+            if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
             {
                 string command = $"/c dotnet run --project {this.path}\\LeaseManager\\LeaseManager.csproj {arguments}";
                 Process.Start(new ProcessStartInfo(@"cmd.exe ", @command) { UseShellExecute = true });
             }
             // TODO: add multiple console window launching
-            else 
+            else
             {
                 string command = $"dotnet run --project {this.path}/LeaseManager/LeaseManager.csproj {arguments}";
-                Process.Start("dotnet", command);
+                Process.Start("gnome-terminal", $"-- bash -c \"{command}; exec bash\"");
             }
         }
 
@@ -227,25 +229,26 @@ namespace dadtkv
                     clusterId = i;
                     continue;
                 }
-                clusterNodes += $"{i}-{this.leaseManagers[i].getId()}-{this.leaseManagers[i].getUrl()};";
+                clusterNodes += $"{i}-{this.leaseManagers[i].getId()}-{this.leaseManagers[i].getUrl()}!";
             }
 
             return (clusterId, clusterNodes);
         }
-        
+
         private string getAllTransactionManagersString()
         {
             string transactionManagers = "";
             for (int i = 0; i < this.transactionManagers.Count; i++)
             {
-                transactionManagers += $"{i}-{this.transactionManagers[i].getId()}-{this.transactionManagers[i].getUrl()};";
+                transactionManagers += $"{i}-{this.transactionManagers[i].getId()}-{this.transactionManagers[i].getUrl()}!";
             }
             return transactionManagers;
-        } 
+        }
 
         public void launchProcesses()
         {
-            foreach (ProcessInfo client in this.clients) {
+            foreach (ProcessInfo client in this.clients)
+            {
                 this.launchClient(client);
             }
             foreach (ProcessInfo transactionManager in this.transactionManagers)
