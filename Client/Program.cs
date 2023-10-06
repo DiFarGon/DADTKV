@@ -22,7 +22,10 @@ namespace Client
                 debug = true;
             }
 
-            Client client = new Client(args[0], args[2], debug);
+            int port = new Uri(args[2]).Port;
+            string url = $"http://localhost:{port}";
+
+            Client client = new Client(args[0], url, debug);
 
             foreach (string line in script)
             {
@@ -42,6 +45,7 @@ namespace Client
                 }
             }
 
+            client.closeChannel();
         }
     }
 }
