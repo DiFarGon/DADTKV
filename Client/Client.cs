@@ -25,8 +25,8 @@ namespace Client
 
             this.Logger("created");
             Thread.Sleep(1000);
-            channel = GrpcChannel.ForAddress(this.tmUrl);
-            client = new ClientService.ClientServiceClient(channel);
+            this.channel = GrpcChannel.ForAddress(this.tmUrl);
+            this.client = new ClientService.ClientServiceClient(channel);
         }
 
         private void Logger(string message)
@@ -86,6 +86,11 @@ namespace Client
         {
             this.Logger("Sending Status Request");
             client.Status(new StatusRequest { });
+        }
+
+        public async void closeChannel()
+        {
+            await this.channel.ShutdownAsync();
         }
     }
 }
