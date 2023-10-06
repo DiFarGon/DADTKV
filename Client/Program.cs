@@ -24,8 +24,6 @@ namespace Client
 
             Client client = new Client(args[0], args[2], debug);
 
-            Thread.Sleep(5000); // testing purposes
-
             foreach (string line in script)
             {
                 switch (line[0])

@@ -25,7 +25,7 @@ namespace Client
 
             this.Logger("created");
             Thread.Sleep(1000);
-            channel = GrpcChannel.ForAddress("http://localhost:10000");
+            channel = GrpcChannel.ForAddress(this.tmUrl);
             client = new ClientService.ClientServiceClient(channel);
         }
 
