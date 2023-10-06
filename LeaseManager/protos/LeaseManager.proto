@@ -4,7 +4,7 @@ service LeaseManagerService {
     // RPC for exchanging control messages with other lease managers
     rpc ControlLM(ControlLMRequest) returns (ControlLMResponse);
     
-    // TODO: add rpc for receiving a lease request from a client
+    rpc Lease(LeaseRequest) returns (LeaseResponse);
 
     rpc Prepare(PrepareRequest) returns (PrepareResponse);
     rpc Accept(AcceptRequest) returns (AcceptResponse);
@@ -22,6 +22,13 @@ message ControlLMResponse {
     // Acknowledgment of request reception
     int32 lm_id = 1;
 }
+
+message LeaseRequest {
+    string tmId = 1;
+    repeated string keys = 2;
+}
+
+message LeaseResponse { }
 
 message PrepareRequest {
     int32 lm_id = 1;
