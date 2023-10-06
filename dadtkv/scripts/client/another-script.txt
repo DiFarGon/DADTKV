@@ -16,3 +16,6 @@ T ("a-key-name","another-key-name") (<"name1",10>,<"name2",20>)
 T () (<"name3",456>)
 # wait command (in milliseconds)
 W 5000
+# A status request from all the processes in the system
+# is issued via a S command
+S
