@@ -41,19 +41,8 @@ namespace LeaseManager
             new Dictionary<int, (string, TransactionManagerService.TransactionManagerServiceClient)>();
 
         // lease have this fromat: "tmId-dataKey1;dataKey2;dataKey3;"
-        private Dictionary<string, string> granted_rqstdConflicts = new Dictionary<string, string>(); // key is a granted lease, value is a the lease in queue that conflicts with it ; TODO: maybe could have multiple values?
-        private Dictionary<string, List<string>> queue_grntdConflicts = new Dictionary<string, List<string>>(); // key is a lease in queue, value is a list of granted leases that conflict with it
-        // this was, in my opinion, the best way to do it.
-        //  - for a data key request i check if it conflicts with any of the keys in granted_rqstdConflicts
-        //      - if so: 
-        //          - add the incoming lease to the values of granted_rqstdConflicts for that all the keys that conflict;
-        //          - add the incoming lease to the queue_grntdConflicts and set its value to all the leases in granted_rqstdConflicts that conflict with it;
-        //          - send a message to the TM that requested the lease to notify it that it has to wait for the lease; 
-        //          - send messages to the TMs that have the leases in granted_rqstdConflicts(keys) that conflict with the incoming lease telling them to execute one more transaction and then release the lease;
-        //      - if not:
-        //          - add the incoming lease to the queue_grntdConflicts and set its value to an empty list;
-        // the big advantage of this implementation is that when a TM releases a lease, i can lookup what key in granted_rqstdConflicts it refers to and obtain the associated value (the lease in queue that conflicts with it)
-        // and then remove the released lease from the list of conflicting leases of the lease in queue and check if the list is empty.
+        private List<Lease> GrantedLeases = new List<Lease>();
+        private List<Lease> WaitingLeases = new List<Lease>();
 
 
         public LeaseManager(int clusterId, string id, string url, string startTime, bool debugMode)
@@ -79,6 +68,45 @@ namespace LeaseManager
             if (this.debug) Console.WriteLine($"(TimeStamp: {DateTime.UtcNow}): [ LM {this.id} (P{this.clusterId}) ]\t" + message + '\n');
         }
 
+        /// <summary>
+        /// Adds a lease to the queue. If a lease owned by the
+        /// same Transaction Manager already exists in the queue,
+        /// simply adds new lease's keys which the existing one
+        /// didn't contain already. Makes sure every conflict is
+        /// adressed after.
+        /// </summary>
+        /// <param name="newLease">Lease to be added</param>
+        public void AddLeaseToQueue(Lease newLease)
+        {
+            foreach (Lease existingLease in this.WaitingLeases)
+            {
+                if (existingLease.TmId == newLease.TmId) {
+                    existingLease.AddKeys(newLease.Keys);
+                    this.HandleLeaseBlockage(existingLease);
+                    return;
+                }
+            }
+            this.WaitingLeases.Add(newLease);
+            this.HandleLeaseBlockage(newLease);
+        }
+
+        /// <summary>
+        /// If lease conflicts with an already granted lease adds
+        /// given lease to the conflict list of every conflicting 
+        /// granted lease and the other way round
+        /// </summary>
+        /// <param name="lease">Potentially conflicting lease</param>
+        private void HandleLeaseBlockage(Lease lease)
+        {
+            foreach (Lease granted in this.GrantedLeases)
+            {
+                if (lease.ConflictsWith(granted))
+                {
+                    granted.AddConflict(lease);
+                    lease.AddConflict(granted);
+                }
+            }
+        }
         public bool isProposer() { return this.proposer; }
 
         public bool isDecided() { return this.decided; }
@@ -150,42 +178,6 @@ namespace LeaseManager
                 lease += key + ";";
             }
             return lease;
-        }
-
-        public void addLeaseToQueue(string tmId, List<string> dataKeys)
-        //  FIXME: not doing any checks on the lease, should i?
-        {
-            string newLease = parseLease(tmId, dataKeys);
-            this.queue_grntdConflicts[newLease] = new List<string>();
-
-            foreach (KeyValuePair<string, string> pair in this.granted_rqstdConflicts)
-            {
-                if (newLease == pair.Key)
-                {
-                    this.granted_rqstdConflicts[pair.Key] = newLease;
-                    this.queue_grntdConflicts[newLease].Add(pair.Key);
-                }
-            }
-        }
-
-        public void moveLeaseQueueToGranted(string tmId, List<string> dataKeys)
-        //  FIXME: not doing any checks on the lease, should i?
-        {
-            string newLease = parseLease(tmId, dataKeys);
-
-            this.queue_grntdConflicts.Remove(newLease);
-            this.granted_rqstdConflicts[newLease] = "";
-        }
-
-        public void releaseLease(string tmId, List<string> dataKeys)
-        //  FIXME: not doing any checks on the lease, should i?
-        {
-            string releasedLease = parseLease(tmId, dataKeys);
-
-            string blockedLease = this.granted_rqstdConflicts[releasedLease];
-            this.granted_rqstdConflicts.Remove(releasedLease);
-
-            this.queue_grntdConflicts[blockedLease].Remove(releasedLease);
         }
 
         public void incAcceptedCount() { this.acceptedReceivedCount++; }

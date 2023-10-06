@@ -25,11 +25,14 @@ namespace LeaseManager
             return Task.FromResult(response);
         }
 
-        public override Task<LeaseResponse> Lease(LeaseRequest request,  ServerCallContext context)
+        public override Task<LeaseResponse> Lease(LeaseRequest request, ServerCallContext context)
         {
+            leaseManager.Logger($"Received lease request from {request.TmId}");
+
             LeaseResponse response = new LeaseResponse();
 
-            leaseManager.Logger($"Received lease request from {request.TmId}");
+            Lease lease = new Lease(request.TmId, new List<string>(request.Keys));
+            leaseManager.AddLeaseToQueue(lease);
 
             return Task.FromResult(response);
         }
