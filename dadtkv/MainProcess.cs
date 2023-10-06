@@ -66,7 +66,16 @@ namespace dadtkv
             string[] tokens = line.Split(' ');
             string id = tokens[1];
             string type = tokens[2];
-            string url = tokens[3];
+            string url;
+
+            if (type == "C")
+            {
+                url = tokens[3];
+            }
+            else {  // for now let's just run everything on the same machine
+                int port = new Uri(tokens[3]).Port;
+                url = $"http://localhost:{port}";
+            }
 
             switch (type)
             {
