@@ -38,6 +38,16 @@ namespace TransactionManager
             }
         }
 
+        public string getId()
+        {
+            return this.id;
+        }
+
+        public Dictionary<int, (string, LeaseManagerService.LeaseManagerServiceClient)> getLeaseManagersServices()
+        {
+            return this.ids_lmServices;
+        }
+
         public void setTmClusterNodes(string tms)
         {
             string[] keyValuePairs = tms.Split(';', StringSplitOptions.RemoveEmptyEntries);

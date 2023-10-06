@@ -19,6 +19,33 @@ namespace TransactionManager
         public override Task<TransactionReply> Transaction(TransactionRequest transactionRequest, ServerCallContext context)
         {
             transactionManager.Logger("Received Transaction Request");
+
+            LeaseRequest leaseRequest = new LeaseRequest { TmId = transactionManager.getId() };
+
+            List<string> keysRead = new List<string>(transactionRequest.KeysRead);
+            List<DadInt> dadIntsWrite = new List<DadInt>(transactionRequest.KeysWrite);
+            
+            List<string> keysWrite = new List<string>();
+            foreach (DadInt dadInt in dadIntsWrite)
+            {
+                keysWrite.Add(dadInt.Key);
+            }
+
+            List<string> keys = keysRead.Concat(keysWrite).ToList();
+
+            foreach (string key in keys)
+            {
+                leaseRequest.Keys.Add(key);
+            }
+
+            transactionManager.Logger("Broadcasting lease request to lease managers");
+
+            foreach (int clusterId in transactionManager.getLeaseManagersServices().Keys)
+            {
+                LeaseManagerService.LeaseManagerServiceClient channel = transactionManager.getLeaseManagersServices()[clusterId].Item2;
+                channel.Lease(leaseRequest);
+            }
+
             var reply = new TransactionReply();
             return Task.FromResult(reply);
         }
