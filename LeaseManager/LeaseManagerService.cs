@@ -25,7 +25,7 @@ namespace LeaseManager
             return Task.FromResult(response);
         }
 
-        public override Task<LeaseResponse> Lease(LeaseRequest request,  ServerCallContext context)
+        public override Task<LeaseResponse> Lease(LeaseRequest request, ServerCallContext context)
         {
             LeaseResponse response = new LeaseResponse();
 
@@ -34,9 +34,9 @@ namespace LeaseManager
             return Task.FromResult(response);
         }
 
-        public override Task<PrepareResponse> Prepare(PrepareRequest request, ServerCallContext context)
+        public override Task<Prepare1Response> Prepare1(Prepare1Request request, ServerCallContext context)
         {
-            PrepareResponse response = new PrepareResponse();
+            Prepare1Response response = new Prepare1Response();
 
             int prepareRound = request.RoundId;
             int senderId = request.LmId;
@@ -57,7 +57,7 @@ namespace LeaseManager
                     response.LastAcceptedRoundNodeId = readTS.Item2;
 
                 }
-                // the incoming prepare msg has a roundId greater than this lm's RTS, send back promise
+                // the incoming prepare msg has a roundId greater than this node's RTS, send back promise
                 else
                 {
                     leaseManager.Logger($"Prepare request accepted from {senderId}, roundId ({prepareRound}, {senderId}) > readTS {readTS}");
@@ -76,9 +76,9 @@ namespace LeaseManager
             return Task.FromResult(response);
         }
 
-        public override Task<AcceptResponse> Accept(AcceptRequest request, ServerCallContext context)
+        public override Task<Accept1Response> Accept1(Accept1Request request, ServerCallContext context)
         {
-            AcceptResponse response = new AcceptResponse();
+            Accept1Response response = new Accept1Response();
 
             int acceptRound = request.RoundId;
             int senderId = request.LmId;
@@ -111,9 +111,9 @@ namespace LeaseManager
             return Task.FromResult(response);
         }
 
-        public override Task<AcceptedResponse> Accepted(AcceptedRequest request, ServerCallContext context)
+        public override Task<Accepted1Response> Accepted1(Accepted1Request request, ServerCallContext context)
         {
-            AcceptedResponse response = new AcceptedResponse();
+            Accepted1Response response = new Accepted1Response();
 
             int acceptedRound = request.RoundId;
             int senderId = request.LmId;

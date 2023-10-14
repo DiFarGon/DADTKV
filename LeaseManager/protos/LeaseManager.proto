@@ -6,11 +6,11 @@ service LeaseManagerService {
     
     rpc Lease(LeaseRequest) returns (LeaseResponse);
 
-    rpc Prepare(PrepareRequest) returns (PrepareResponse);
-    rpc Accept(AcceptRequest) returns (AcceptResponse);
-    // when a node accepts a AcceptRequest, it should send a message to all nodes saying it accepted for round_id the value v 
+    rpc Prepare1(Prepare1Request) returns (Prepare1Response);
+    rpc Accept1(Accept1Request) returns (Accept1Response);
+    // when a node accept1s a Accept1Request, it should send a message to all nodes saying it accepted for round_id the value v 
     // because if any node receives a majority of these messages (for the same round_id), itconsensus has been achieved for that paxos instance
-    rpc Accepted(AcceptedRequest) returns (AcceptedResponse);
+    rpc Accepted1(Accepted1Request) returns (Accepted1Response);
 }
 
 message ControlLMRequest {
@@ -30,13 +30,13 @@ message LeaseRequest {
 
 message LeaseResponse { }
 
-message PrepareRequest {
+message Prepare1Request {
     int32 lm_id = 1;
     int32 round_id = 2;
 }
 
 // TODO: understand what value should be exactly (list of leases? leases in queue and leases granted(state)?)
-message PrepareResponse {
+message Prepare1Response {
     int32 lm_id = 1;
     int32 round_id = 2; 
 
@@ -52,14 +52,14 @@ message PrepareResponse {
     repeated string last_accepted_value = 8; // only for ack = true and if this already accepted a value
 }
 
-message AcceptRequest {
+message Accept1Request {
     int32 lm_id = 1;
     int32 round_id = 2;
 
     repeated string value = 3;
 }
 
-message AcceptResponse {
+message Accept1Response {
     int32 lm_id = 1;
     int32 round_id = 2;
 
@@ -67,14 +67,14 @@ message AcceptResponse {
     int32 last_promised_round_id = 4; // only for ack = false
 }
 
-message AcceptedRequest {
+message Accepted1Request {
     int32 lm_id = 1;
     int32 round_id = 2;
 
     repeated string value = 3;
 }
 
-message AcceptedResponse {
+message Accepted1Response {
     int32 lm_id = 1;
     int32 round_id = 2;
 

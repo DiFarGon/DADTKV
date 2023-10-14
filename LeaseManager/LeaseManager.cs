@@ -305,9 +305,9 @@ namespace LeaseManager
             int majority = (this.paxosNodesCount + 1) / 2; // Assuming the current node is also part of the quorum
             int receivedPromises = 1; // starts counting with itself
 
-            List<Task<PrepareResponse>> responseTasks = new List<Task<PrepareResponse>>();
+            List<Task<Prepare1Response>> responseTasks = new List<Task<Prepare1Response>>();
 
-            PrepareRequest request = new PrepareRequest
+            Prepare1Request request = new Prepare1Request
             {
                 LmId = this.clusterId,
                 RoundId = this.readTS.Item1
@@ -316,17 +316,17 @@ namespace LeaseManager
             //  Sends prepare messages to all nodes in the cluster and stores tasks in a list 
             foreach (KeyValuePair<int, (string, LeaseManagerService.LeaseManagerServiceClient)> pair in this.ids_lmsServices)
             {
-                Task<PrepareResponse> response = pair.Value.Item2.PrepareAsync(request).ResponseAsync;
+                Task<Prepare1Response> response = pair.Value.Item2.Prepare1Async(request).ResponseAsync;
                 responseTasks.Add(response);
             }
 
             // Loop that awaits for a majority of promises or a nack
             while (responseTasks.Count > 0)
             {
-                Task<PrepareResponse> completedTask = await Task.WhenAny(responseTasks);
+                Task<Prepare1Response> completedTask = await Task.WhenAny(responseTasks);
                 responseTasks.Remove(completedTask);
 
-                PrepareResponse response = await completedTask;
+                Prepare1Response response = await completedTask;
 
                 if (response.Ack)
                 {
@@ -356,32 +356,32 @@ namespace LeaseManager
         {
             this.Logger("Accept");
 
-            AcceptRequest request = new AcceptRequest
+            Accept1Request request = new Accept1Request
             {
                 LmId = this.clusterId,
                 RoundId = this.readTS.Item1,
                 Value = { this.lastAcceptedValue } // FIXME: the value still TBD
             };
 
-            List<Task<AcceptResponse>> responseTasks = new List<Task<AcceptResponse>>();
+            List<Task<Accept1Response>> responseTasks = new List<Task<Accept1Response>>();
 
-            Task<AcceptResponse> responseTask = ownClient.AcceptAsync(request).ResponseAsync;
+            Task<Accept1Response> responseTask = ownClient.Accept1Async(request).ResponseAsync;
 
             responseTasks.Add(responseTask);
 
             //  Sends prepare messages to all nodes in the cluster and stores tasks in a list to then await each one (not in order)
             foreach (KeyValuePair<int, (string, LeaseManagerService.LeaseManagerServiceClient)> pair in this.ids_lmsServices)
             {
-                Task<AcceptResponse> response = pair.Value.Item2.AcceptAsync(request).ResponseAsync;
+                Task<Accept1Response> response = pair.Value.Item2.Accept1Async(request).ResponseAsync;
                 responseTasks.Add(response);
             }
 
             while (responseTasks.Count > 0)
             {
-                Task<AcceptResponse> completedTask = await Task.WhenAny(responseTasks);
+                Task<Accept1Response> completedTask = await Task.WhenAny(responseTasks);
                 responseTasks.Remove(completedTask);
 
-                AcceptResponse response = await completedTask;
+                Accept1Response response = await completedTask;
 
                 if (!response.Ack)
                 {
@@ -396,7 +396,7 @@ namespace LeaseManager
         {
             this.Logger("Broadcast accepted");
 
-            AcceptedRequest request = new AcceptedRequest
+            Accepted1Request request = new Accepted1Request
             {
                 LmId = this.clusterId,
                 RoundId = this.readTS.Item1,
@@ -405,7 +405,7 @@ namespace LeaseManager
 
             foreach (KeyValuePair<int, (string, LeaseManagerService.LeaseManagerServiceClient)> pair in this.ids_lmsServices)
             {
-                AcceptedResponse response = pair.Value.Item2.Accepted(request);
+                Accepted1Response response = pair.Value.Item2.Accepted1(request);
             }
         }
 

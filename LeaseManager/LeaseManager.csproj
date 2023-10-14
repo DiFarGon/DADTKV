@@ -18,6 +18,7 @@
     </PackageReference>
     <Protobuf Include="protos\LeaseManager.proto" GrpcServices="Both" />
     <Protobuf Include="protos\TransactionManager.proto" GrpcServices="Client" />
+    <Protobuf Include="protos\PaxosNode.proto" GrpcServices="Both" />
   </ItemGroup>
 
 </Project>
