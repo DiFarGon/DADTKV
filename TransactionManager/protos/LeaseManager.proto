@@ -2,6 +2,7 @@ syntax = "proto3";
 
 service LeaseManagerService {
     rpc Lease(LeaseRequest) returns (LeaseReply);
+    rpc Status_LM(StatusRequest_LM) returns (StatusReply_LM);
 }
 
 message LeaseRequest {
@@ -10,3 +11,11 @@ message LeaseRequest {
 }
 
 message LeaseReply { }
+
+message StatusRequest_LM{
+
+}
+
+message StatusReply_LM{
+
+}

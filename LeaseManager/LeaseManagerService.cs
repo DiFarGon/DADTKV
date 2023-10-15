@@ -3,6 +3,7 @@ using Google.Protobuf.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using Grpc.Core;
+using System.Transactions;
 
 namespace LeaseManager
 {
@@ -20,7 +21,7 @@ namespace LeaseManager
             ControlLMResponse response = new ControlLMResponse();
             response.LmId = leaseManager.getClusterId();
 
-            Console.WriteLine($"[LeaseManager {leaseManager.getClusterId()}]\tControl request received from {request.LmId}");
+            //Console.WriteLine($"[LeaseManager {leaseManager.getClusterId()}]\tControl request received from {request.LmId}");
 
             return Task.FromResult(response);
         }
@@ -149,6 +150,13 @@ namespace LeaseManager
                 }
             }
             return Task.FromResult(response);
+        }
+
+        public override Task<StatusReply_LM> Status_LM(StatusRequest_LM request, ServerCallContext context)
+        {
+            leaseManager.Logger("I'm Alive");
+            var reply = new StatusReply_LM();
+            return Task.FromResult(reply);
         }
     }
 }

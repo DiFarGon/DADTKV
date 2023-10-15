@@ -3,6 +3,7 @@ syntax = "proto3";
 service TransactionManagerService {
     // RPC for exchanging control messages with other lease managers
     rpc ControlTM(ControlTMRequest) returns (ControlTMResponse);
+    rpc Status_TM(StatusRequest_TM) returns (StatusReply_TM);
 }
 
 message ControlTMRequest {
@@ -13,4 +14,12 @@ message ControlTMRequest {
 message ControlTMResponse {
     // Acknowledgment of request reception
     string tm_id = 1;
+}
+
+message StatusRequest_TM{
+
+}
+
+message StatusReply_TM{
+
 }

@@ -42,7 +42,7 @@ namespace Client
             Thread.Sleep(line[1]);
         }
 
-        public void handleT(string line)
+        public async void handleT(string line)
         {
             this.Logger("Sending Transaction Request");
             TransactionRequest transactionRequest = new TransactionRequest { ClientId = this.id };
@@ -78,8 +78,13 @@ namespace Client
                     transactionRequest.KeysWrite.Add(dadInt);
                 }
             }
-            //doubt, if i have to catch the reply or not, since it is an empty reply
-            client.Transaction(transactionRequest);
+            //wait asynchronously for the response
+            var response = await client.TransactionAsync(transactionRequest);
+            this.Logger("Received response");
+            foreach(DadInt dadInt_aux in response.Read)
+            {
+                this.Logger("DadInt" + dadInt_aux.Key + "with value:" + dadInt_aux.Value);
+            }
         }
 
         public void handleS()

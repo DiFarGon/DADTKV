@@ -25,6 +25,8 @@ namespace Client
             int port = new Uri(args[2]).Port;
             string url = $"http://localhost:{port}";
 
+            Thread.Sleep(7000);
+
             Client client = new Client(args[0], url, debug);
 
             foreach (string line in script)
