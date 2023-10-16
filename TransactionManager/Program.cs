@@ -30,7 +30,7 @@ namespace TransactionManager
 
             Server server = new Server
             {
-                Services = { ClientService.BindService(new TransactionManagerServiceImpl(transactionManager)) },
+                Services = { TransactionManagerService.BindService(new TransactionManagerServiceImpl(transactionManager)) },
                 Ports = { serverPort }
             };
 

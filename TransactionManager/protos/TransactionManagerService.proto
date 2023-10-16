@@ -1,0 +1,43 @@
+syntax = "proto3";
+
+service TransactionManagerService {
+rpc Status(StatusRequest) returns (StatusResponse);
+rpc Transaction(TransactionRequest) returns (TransactionResponse);
+rpc AcknowledgeConsensus(AcknowledgeConsensusRequest) returns (AcknowledgeConsensusResponse);
+}
+
+message StatusRequest {
+
+}
+
+message StatusResponse {
+
+}
+
+message TransactionRequest {
+	string clientId = 1;
+	repeated string keysRead = 2;
+	repeated DadInt keysWrite = 3;
+}
+
+message TransactionResponse {
+	repeated DadInt read = 1;
+}
+
+message DadInt {
+	string key = 1;
+	int32 value = 2;
+}
+
+message AcknowledgeConsensusRequest {
+	repeated Lease leases = 1;
+}
+
+message AcknowledgeConsensusResponse {
+	
+}
+
+message Lease {
+	string tmId = 1;
+	repeated string keys = 2;
+}

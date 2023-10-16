@@ -16,8 +16,7 @@
 			<PrivateAssets>all</PrivateAssets>
 			<IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
 		</PackageReference>
-		<Protobuf Include="protos\ClientService.proto" GrpcServices="Server" />
-		<Protobuf Include="protos\TransactionManager.proto" GrpcServices="Client" />
+		<Protobuf Include="protos\TransactionManagerService.proto" GrpcServices="Both" />
 		<Protobuf Include="protos\LeaseManager.proto" GrpcServices="Client" />
 	</ItemGroup>
 

@@ -7,7 +7,7 @@ using System.Threading.Tasks;
 
 namespace TransactionManager
 {
-    class TransactionManagerServiceImpl : ClientService.ClientServiceBase
+    class TransactionManagerServiceImpl : TransactionManagerService.TransactionManagerServiceBase
     {
 
         TransactionManager transactionManager;
@@ -16,7 +16,7 @@ namespace TransactionManager
             this.transactionManager = transactionManager;
         }
 
-        public override Task<TransactionReply> Transaction(TransactionRequest transactionRequest, ServerCallContext context)
+        public override Task<TransactionResponse> Transaction(TransactionRequest transactionRequest, ServerCallContext context)
         {
             transactionManager.Logger("Received Transaction Request");
 
@@ -46,14 +46,14 @@ namespace TransactionManager
                 channel.Lease(leaseRequest);
             }
 
-            var reply = new TransactionReply();
+            var reply = new TransactionResponse();
             return Task.FromResult(reply);
         }
 
-        public override Task<StatusReply> Status(StatusRequest statusRequest, ServerCallContext context)
+        public override Task<StatusResponse> Status(StatusRequest statusRequest, ServerCallContext context)
         {
             transactionManager.Logger("I'm Alive");
-            var reply = new StatusReply();
+            var reply = new StatusResponse();
             return Task.FromResult(reply);
         }
     }
