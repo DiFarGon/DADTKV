@@ -20,4 +20,10 @@
     <Protobuf Include="protos\TransactionManager.proto" GrpcServices="Client" />
   </ItemGroup>
 
+  <ItemGroup>
+		<Compile Include="..\Lease.cs">
+			<Link>Shared\Lease.cs</Link>
+		</Compile>
+	</ItemGroup>
+
 </Project>
