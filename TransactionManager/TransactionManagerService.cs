@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using Lease;
 
 namespace TransactionManager
 {
@@ -20,7 +21,7 @@ namespace TransactionManager
         {
             transactionManager.Logger("Received Transaction Request");
 
-            LeaseRequest leaseRequest = new LeaseRequest { TmId = transactionManager.getId() };
+            LeaseRequest leaseRequest = new LeaseRequest { TmId = transactionManager.GetId() };
 
             List<string> keysRead = new List<string>(transactionRequest.KeysRead);
             List<DadInt> dadIntsWrite = new List<DadInt>(transactionRequest.KeysWrite);
@@ -40,14 +41,14 @@ namespace TransactionManager
 
             transactionManager.Logger("Broadcasting lease request to lease managers");
 
-            foreach (int clusterId in transactionManager.getLeaseManagersServices().Keys)
+            foreach (int clusterId in transactionManager.GetLeaseManagersServices().Keys)
             {
-                LeaseManagerService.LeaseManagerServiceClient channel = transactionManager.getLeaseManagersServices()[clusterId].Item2;
+                LeaseManagerService.LeaseManagerServiceClient channel = transactionManager.GetLeaseManagersServices()[clusterId].Item2;
                 channel.Lease(leaseRequest);
             }
 
-            var reply = new TransactionResponse();
-            return Task.FromResult(reply);
+            var response = new TransactionResponse();
+            return Task.FromResult(response);
         }
 
         public override Task<StatusResponse> Status(StatusRequest statusRequest, ServerCallContext context)
@@ -55,6 +56,13 @@ namespace TransactionManager
             transactionManager.Logger("I'm Alive");
             var reply = new StatusResponse();
             return Task.FromResult(reply);
+        }
+
+        public override Task<AcknowledgeConsensusResponse> AcknowledgeConsensus(AcknowledgeConsensusRequest request, ServerCallContext context)
+        {
+
+            AcknowledgeConsensusResponse response = new AcknowledgeConsensusResponse();
+            return Task.FromResult(response);
         }
     }
 }
