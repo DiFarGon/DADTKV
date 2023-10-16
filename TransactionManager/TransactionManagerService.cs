@@ -21,7 +21,7 @@ namespace TransactionManager
         {
             transactionManager.Logger("Received Transaction Request");
 
-            LeaseRequest leaseRequest = new LeaseRequest { TmId = transactionManager.GetId() };
+            LeaseRequest leaseRequest = new LeaseRequest { TmId = transactionManager.Id };
 
             List<string> keysRead = new List<string>(transactionRequest.KeysRead);
             List<DadInt> dadIntsWrite = new List<DadInt>(transactionRequest.KeysWrite);
@@ -41,9 +41,9 @@ namespace TransactionManager
 
             transactionManager.Logger("Broadcasting lease request to lease managers");
 
-            foreach (int clusterId in transactionManager.GetLeaseManagersServices().Keys)
+            foreach (LeaseManagerService.LeaseManagerServiceClient leaseManagerService in transactionManager.LmServices.Values)
             {
-                LeaseManagerService.LeaseManagerServiceClient channel = transactionManager.GetLeaseManagersServices()[clusterId].Item2;
+                LeaseManagerService.LeaseManagerServiceClient channel = leaseManagerService;
                 channel.Lease(leaseRequest);
             }
 

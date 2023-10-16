@@ -13,13 +13,13 @@ namespace TransactionManager
     internal class TransactionManager
     {
         private int clusterId;
-        private string id;
+        public readonly string Id;
         private string url;
         private bool debug;
-        private Dictionary<int, (string, TransactionManagerService.TransactionManagerServiceClient)> ids_tmServices =
-            new Dictionary<int, (string, TransactionManagerService.TransactionManagerServiceClient)>();
-        private Dictionary<int, (string, LeaseManagerService.LeaseManagerServiceClient)> ids_lmServices =
-            new Dictionary<int, (string, LeaseManagerService.LeaseManagerServiceClient)>();
+        public readonly Dictionary<string, TransactionManagerService.TransactionManagerServiceClient> TmServices =
+            new Dictionary<string, TransactionManagerService.TransactionManagerServiceClient>();
+        public readonly Dictionary<string, LeaseManagerService.LeaseManagerServiceClient> LmServices =
+            new Dictionary<string, LeaseManagerService.LeaseManagerServiceClient>();
 
         private List<Lease> currentLeases = new List<Lease>();
 
@@ -33,7 +33,7 @@ namespace TransactionManager
         public TransactionManager(int clusterId, string id, string url, bool debug)
         {
             this.clusterId = clusterId;
-            this.id = id;
+            this.Id = id;
             this.url = url;
             this.debug = debug;
 
@@ -48,25 +48,13 @@ namespace TransactionManager
         {
             if (debug)
             {
-                Console.WriteLine($"[TransactionManager {this.id}]\t" + message + '\n');
+                Console.WriteLine($"[TransactionManager {this.Id}]\t" + message + '\n');
             }
-        }
-
-        /// <returns>the id of this Transaction Manager instance</returns>
-        public string GetId()
-        {
-            return this.id;
-        }
-
-        /// <returns>a list of every LeaseManagerService</returns>
-        public Dictionary<int, (string, LeaseManagerService.LeaseManagerServiceClient)> GetLeaseManagersServices()
-        {
-            return this.ids_lmServices;
         }
 
         /// <summary>
         /// Decodes the given string representing a list of Transaction Managers
-        /// and saves the decoded list to this.ids_tmServices
+        /// and saves the decoded list to this.TmServices
         /// </summary>
         /// <param name="tms"></param>
         public void SetTmClusterNodes(string tms)
@@ -76,20 +64,19 @@ namespace TransactionManager
             foreach (string pair in keyValuePairs)
             {
                 string[] parts = pair.Split('-');
-                int n = int.Parse(parts[0]);
                 string id = parts[1];
                 string url = parts[2];
 
                 GrpcChannel channel = GrpcChannel.ForAddress(url);
                 TransactionManagerService.TransactionManagerServiceClient client = new TransactionManagerService.TransactionManagerServiceClient(channel);
-                this.ids_tmServices[n] = (id, client);
+                this.TmServices[id] = client;
             }
             this.Logger("set transaction managers");
         }
 
         /// <summary>
         /// Decodes the given string representing a list of Lease Managers
-        /// and saves the decoded list to this.ids_lmServices
+        /// and saves the decoded list to this.LmServices
         /// </summary>
         /// <param name="tms"></param>
         public void SetLmClusterNodes(string lms)
@@ -99,13 +86,12 @@ namespace TransactionManager
             foreach (string pair in keyValuePairs)
             {
                 string[] parts = pair.Split('-');
-                int n = int.Parse(parts[0]);
                 string id = parts[1];
                 string url = parts[2];
 
                 GrpcChannel channel = GrpcChannel.ForAddress(url);
                 LeaseManagerService.LeaseManagerServiceClient client = new LeaseManagerService.LeaseManagerServiceClient(channel);
-                this.ids_lmServices[n] = (id, client);
+                this.LmServices[id] = client;
             }
             this.Logger("set lease managers");
         }
