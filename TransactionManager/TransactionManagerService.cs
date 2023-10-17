@@ -10,8 +10,12 @@ namespace TransactionManager
 {
     class TransactionManagerServiceImpl : TransactionManagerService.TransactionManagerServiceBase
     {
-
         TransactionManager transactionManager;
+
+        /// <summary>
+        /// Creates a new instance of TransactionManagerServiceImpl
+        /// </summary>
+        /// <param name="transactionManager"></param>
         public TransactionManagerServiceImpl(TransactionManager transactionManager)
         {
             this.transactionManager = transactionManager;
@@ -69,6 +73,12 @@ namespace TransactionManager
             return Task.FromResult(response);
         }
 
+        /// <summary>
+        /// Handles a Status rpc call, by logging this Transaction Manager status
+        /// </summary>
+        /// <param name="statusRequest"></param>
+        /// <param name="context"></param>
+        /// <returns></returns>
         public override Task<StatusResponse> Status(StatusRequest statusRequest, ServerCallContext context)
         {
             transactionManager.Logger("I'm Alive");
@@ -76,8 +86,21 @@ namespace TransactionManager
             return Task.FromResult(reply);
         }
 
+        /// <summary>
+        /// Handles an AcknowledgeConsensus rpc by making
+        /// this Transaction Manager know what current leases
+        /// were assigned by the system
+        /// </summary>
+        /// <param name="request"></param>
+        /// <param name="context"></param>
+        /// <returns></returns>
         public override Task<AcknowledgeConsensusResponse> AcknowledgeConsensus(AcknowledgeConsensusRequest request, ServerCallContext context)
         {
+            List<Lease.Lease> leases = new List<Lease.Lease>();
+            request.Leases.ToList().ForEach(lease => {
+                leases.Add(new Lease.Lease(lease.TmId, new List<string>(lease.Keys)));
+            });
+            this.transactionManager.SetCurrentLeases(leases);
             AcknowledgeConsensusResponse response = new AcknowledgeConsensusResponse();
             return Task.FromResult(response);
         }

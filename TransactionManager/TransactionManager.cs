@@ -117,7 +117,8 @@ namespace TransactionManager
         }
 
         /// <summary>
-        /// 
+        /// Checks if all required keys are held through leases and in
+        /// the positive case executes the transaction
         /// </summary>
         /// <param name="keysToRead"></param>
         /// <param name="dadIntsToWrite"></param>
