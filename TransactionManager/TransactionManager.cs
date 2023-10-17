@@ -116,6 +116,11 @@ namespace TransactionManager
             return keys;
         }
 
+        public void ExecuteTransaction()
+        {
+            // TODO
+        }
+
         /// <summary>
         /// Checks if all required keys are held through leases and in
         /// the positive case executes the transaction
@@ -124,7 +129,7 @@ namespace TransactionManager
         /// <param name="dadIntsToWrite"></param>
         /// <returns>true if it was possible to execute the transaction,
         /// false if not all required keys were held</returns>
-        public bool ExecuteTransaction(List<string> keysToRead, List<DadInt.DadInt> dadIntsToWrite)
+        public bool AttemptTransaction(List<string> keysToRead, List<DadInt.DadInt> dadIntsToWrite)
         {
             List<string> keysHeld = this.KeysHeld();
             List<string> requiredKeys = keysToRead;
@@ -139,7 +144,7 @@ namespace TransactionManager
             bool allRequiredKeysHeld = requiredKeys.All(element => keysHeld.Contains(element));
             if (allRequiredKeysHeld)
             {
-                // TODO: execute transaction
+                this.ExecuteTransaction();
                 return true;
             }
             return false;

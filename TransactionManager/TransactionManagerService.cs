@@ -44,7 +44,7 @@ namespace TransactionManager
 
             var response = new TransactionResponse();
 
-            if (this.transactionManager.ExecuteTransaction(keysRead, dadIntsWrite))
+            if (this.transactionManager.AttemptTransaction(keysRead, dadIntsWrite))
             {
                 return Task.FromResult(response);
             }
