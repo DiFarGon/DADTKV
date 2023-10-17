@@ -6,6 +6,7 @@ using System.Text;
 using System.Threading.Tasks;
 using Grpc.Net.Client;
 using System.Transactions;
+using System.Threading.Tasks.Dataflow;
 
 namespace TransactionManager
 {
@@ -21,6 +22,8 @@ namespace TransactionManager
             new Dictionary<string, LeaseManagerService.LeaseManagerServiceClient>();
         private List<Lease.Lease> currentLeases = new List<Lease.Lease>();
         private List<Lease.Lease> heldLeases = new List<Lease.Lease>();
+        private List<Transaction.Transaction> pendingTransactions = new List<Transaction.Transaction>();
+        private Dictionary<string, DadInt.DadInt> store = new Dictionary<string, DadInt.DadInt>();
 
         /// <summary>
         /// Creates a new Transaction Manager with given parameters
@@ -116,9 +119,75 @@ namespace TransactionManager
             return keys;
         }
 
-        public void ExecuteTransaction()
+        /// <summary>
+        /// Add transaction to the pending transactions list
+        /// </summary>
+        /// <param name="transaction"></param>
+        public void StageTransaction(Transaction.Transaction transaction)
         {
-            // TODO
+            this.pendingTransactions.Add(transaction);
+        }
+
+        /// <summary>
+        /// Attempts to perform every pending transaction
+        /// </summary>
+        public void AttemptEveryTransaction() {
+            foreach (Transaction.Transaction transaction in this.pendingTransactions)
+            {
+                this.pendingTransactions.Remove(transaction);
+                this.AttemptTransaction(transaction);
+            }
+        }
+
+        /// <summary>
+        /// Broadcast to all Lease Managers a request for acquiring the required
+        /// Lease to execute the given Transaction
+        /// </summary>
+        /// <param name="transaction"></param>
+        public void RequestLease(Transaction.Transaction transaction)
+        {
+            LeaseRequest leaseRequest = new LeaseRequest { TmId = this.Id };
+            
+            List<string> keysWrite = new List<string>();
+            foreach (DadInt.DadInt dadInt in transaction.DadIntsWrite)
+            {
+                keysWrite.Add(dadInt.Key);
+            }
+
+            List<string> keys = transaction.ReadKeys.Concat(keysWrite).ToList();
+
+            foreach (string key in keys) { leaseRequest.Keys.Add(key); }
+
+            this.Logger("Broadcasting lease request to lease managers");
+
+            foreach (LeaseManagerService.LeaseManagerServiceClient leaseManagerService in this.LmServices.Values)
+            {
+                LeaseManagerService.LeaseManagerServiceClient channel = leaseManagerService;
+                channel.Lease(leaseRequest);
+            }
+        }
+
+        /// <summary>
+        /// Executes the given transaction
+        /// </summary>
+        /// <param name="transaction"></param>
+        /// <returns>the list of the read DadInts</returns>
+        public List<DadInt.DadInt> ExecuteTransaction(Transaction.Transaction transaction)
+        {
+            // TODO: sometimes a transaction will be executed without this method being
+            // called from TransactionManagerService.Transaction context
+            // how do we return the read DadInts from Transaction context to the client
+            // who called?
+            foreach (DadInt.DadInt dadInt in transaction.DadIntsWrite)
+            {
+                this.store[dadInt.Key] = dadInt;
+            }
+            List<DadInt.DadInt> readDadInts = new List<DadInt.DadInt>();
+            foreach (string key in transaction.ReadKeys)
+            {
+                readDadInts.Add(this.store[key]);
+            }
+            return readDadInts;
         }
 
         /// <summary>
@@ -127,13 +196,13 @@ namespace TransactionManager
         /// </summary>
         /// <param name="keysToRead"></param>
         /// <param name="dadIntsToWrite"></param>
-        /// <returns>true if it was possible to execute the transaction,
-        /// false if not all required keys were held</returns>
-        public bool AttemptTransaction(List<string> keysToRead, List<DadInt.DadInt> dadIntsToWrite)
+        /// <returns>a boolean indicating the success of the operation
+        /// and a list with the read DadInts</returns>
+        public (bool, List<DadInt.DadInt>) AttemptTransaction(Transaction.Transaction transaction)
         {
             List<string> keysHeld = this.KeysHeld();
-            List<string> requiredKeys = keysToRead;
-            foreach (DadInt.DadInt dadInt in dadIntsToWrite)
+            List<string> requiredKeys = transaction.ReadKeys;
+            foreach (DadInt.DadInt dadInt in transaction.DadIntsWrite)
             {
                 if (!requiredKeys.Contains(dadInt.Key))
                 {
@@ -144,10 +213,10 @@ namespace TransactionManager
             bool allRequiredKeysHeld = requiredKeys.All(element => keysHeld.Contains(element));
             if (allRequiredKeysHeld)
             {
-                this.ExecuteTransaction();
-                return true;
+                return (true, this.ExecuteTransaction(transaction));
             }
-            return false;
+            this.StageTransaction(transaction);
+            return (false, new List<DadInt.DadInt>());
         }
     }
 }

@@ -33,44 +33,29 @@ namespace TransactionManager
         {
             this.transactionManager.Logger("Received Transaction Request");
 
-            LeaseRequest leaseRequest = new LeaseRequest { TmId = transactionManager.Id };
+            Transaction.Transaction transaction = new Transaction.Transaction(transactionRequest);
 
-            List<string> keysRead = new List<string>(transactionRequest.KeysRead);
-
-            List<DadInt.DadInt> dadIntsWrite = new List<DadInt.DadInt>();
-            transactionRequest.DadIntsWrite.ToList().ForEach(dadInt => {
-                dadIntsWrite.Add(new DadInt.DadInt(dadInt.Key, dadInt.Value));
-            });
-
-            var response = new TransactionResponse();
-
-            if (this.transactionManager.AttemptTransaction(keysRead, dadIntsWrite))
+            (bool success, List<DadInt.DadInt> read) = this.transactionManager.AttemptTransaction(transaction);
+            if (success)
             {
+                List<DadIntMessage> dadIntMessages = new List<DadIntMessage>();
+                foreach (DadInt.DadInt dadInt in read)
+                {
+                    dadIntMessages.Add(new DadIntMessage
+                    {
+                        Key = dadInt.Key,
+                        Value = dadInt.Value
+                    });
+                }
+                TransactionResponse response = new TransactionResponse();
+                response.Read.AddRange(dadIntMessages);
                 return Task.FromResult(response);
             }
-            
-            List<string> keysWrite = new List<string>();
-            foreach (DadInt.DadInt dadInt in dadIntsWrite)
-            {
-                keysWrite.Add(dadInt.Key);
-            }
 
-            List<string> keys = keysRead.Concat(keysWrite).ToList();
+            // TODO: should await for lease to be conceded and transaction to be executed
 
-            foreach (string key in keys)
-            {
-                leaseRequest.Keys.Add(key);
-            }
-
-            transactionManager.Logger("Broadcasting lease request to lease managers");
-
-            foreach (LeaseManagerService.LeaseManagerServiceClient leaseManagerService in transactionManager.LmServices.Values)
-            {
-                LeaseManagerService.LeaseManagerServiceClient channel = leaseManagerService;
-                channel.Lease(leaseRequest);
-            }
-
-            return Task.FromResult(response);
+            this.transactionManager.RequestLease(transaction);
+            return Task.FromResult(new TransactionResponse());
         }
 
         /// <summary>
@@ -101,6 +86,7 @@ namespace TransactionManager
                 leases.Add(new Lease.Lease(lease.TmId, new List<string>(lease.Keys)));
             });
             this.transactionManager.SetCurrentLeases(leases);
+            this.transactionManager.AttemptEveryTransaction();
             AcknowledgeConsensusResponse response = new AcknowledgeConsensusResponse();
             return Task.FromResult(response);
         }
