@@ -26,4 +26,10 @@
 		</Compile>
 	</ItemGroup>
 
+	<ItemGroup>
+		<Compile Include="..\DadInt.cs">
+			<Link>Shared\DadInt.cs</Link>
+		</Compile>
+	</ItemGroup>
+
 </Project>

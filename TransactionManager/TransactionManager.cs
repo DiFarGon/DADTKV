@@ -6,7 +6,6 @@ using System.Text;
 using System.Threading.Tasks;
 using Grpc.Net.Client;
 using System.Transactions;
-using Lease;
 
 namespace TransactionManager
 {
@@ -20,8 +19,8 @@ namespace TransactionManager
             new Dictionary<string, TransactionManagerService.TransactionManagerServiceClient>();
         public readonly Dictionary<string, LeaseManagerService.LeaseManagerServiceClient> LmServices =
             new Dictionary<string, LeaseManagerService.LeaseManagerServiceClient>();
-
-        private List<Lease> currentLeases = new List<Lease>();
+        private List<Lease.Lease> currentLeases = new List<Lease.Lease>();
+        private List<Lease.Lease> heldLeases = new List<Lease.Lease>();
 
         /// <summary>
         /// Creates a new Transaction Manager with given parameters
@@ -101,9 +100,48 @@ namespace TransactionManager
         /// known currently assigned leases to the given list
         /// </summary>
         /// <param name="leases"></param>
-        public void SetCurrentLeases(List<Lease> leases)
+        public void SetCurrentLeases(List<Lease.Lease> leases)
         {
             this.currentLeases = leases;
+        }
+
+        /// <returns>A list with every key held through a lease</returns>
+        public List<string> KeysHeld()
+        {
+            List<string> keys = new List<string>();
+            foreach (Lease.Lease lease in this.heldLeases)
+            {
+                keys = keys.Union(lease.Keys).ToList();
+            }
+            return keys;
+        }
+
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="keysToRead"></param>
+        /// <param name="dadIntsToWrite"></param>
+        /// <returns>true if it was possible to execute the transaction,
+        /// false if not all required keys were held</returns>
+        public bool ExecuteTransaction(List<string> keysToRead, List<DadInt.DadInt> dadIntsToWrite)
+        {
+            List<string> keysHeld = this.KeysHeld();
+            List<string> requiredKeys = keysToRead;
+            foreach (DadInt.DadInt dadInt in dadIntsToWrite)
+            {
+                if (!requiredKeys.Contains(dadInt.Key))
+                {
+                    requiredKeys.Add(dadInt.Key);
+                }
+            }
+
+            bool allRequiredKeysHeld = requiredKeys.All(element => keysHeld.Contains(element));
+            if (allRequiredKeysHeld)
+            {
+                // TODO: execute transaction
+                return true;
+            }
+            return false;
         }
     }
 }

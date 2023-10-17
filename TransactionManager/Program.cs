@@ -38,8 +38,8 @@ namespace TransactionManager
 
             Thread.Sleep(2000); // wait for servers to start
 
-            transactionManager.setTmClusterNodes(args[4]);
-            transactionManager.setLmClusterNodes(args[3]);
+            transactionManager.SetTmClusterNodes(args[4]);
+            transactionManager.SetLmClusterNodes(args[3]);
 
             while (true) ;
         }

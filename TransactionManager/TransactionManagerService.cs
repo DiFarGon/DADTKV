@@ -17,17 +17,36 @@ namespace TransactionManager
             this.transactionManager = transactionManager;
         }
 
+        /// <summary>
+        /// On receiving a Transaction request from a Client tries to execute
+        /// the transaction. If it fails broadcasts a Lease request to all
+        /// Lease Managers.
+        /// </summary>
+        /// <param name="transactionRequest"></param>
+        /// <param name="context"></param>
+        /// <returns></returns>
         public override Task<TransactionResponse> Transaction(TransactionRequest transactionRequest, ServerCallContext context)
         {
-            transactionManager.Logger("Received Transaction Request");
+            this.transactionManager.Logger("Received Transaction Request");
 
             LeaseRequest leaseRequest = new LeaseRequest { TmId = transactionManager.Id };
 
             List<string> keysRead = new List<string>(transactionRequest.KeysRead);
-            List<DadInt> dadIntsWrite = new List<DadInt>(transactionRequest.KeysWrite);
+
+            List<DadInt.DadInt> dadIntsWrite = new List<DadInt.DadInt>();
+            transactionRequest.DadIntsWrite.ToList().ForEach(dadInt => {
+                dadIntsWrite.Add(new DadInt.DadInt(dadInt.Key, dadInt.Value));
+            });
+
+            var response = new TransactionResponse();
+
+            if (this.transactionManager.ExecuteTransaction(keysRead, dadIntsWrite))
+            {
+                return Task.FromResult(response);
+            }
             
             List<string> keysWrite = new List<string>();
-            foreach (DadInt dadInt in dadIntsWrite)
+            foreach (DadInt.DadInt dadInt in dadIntsWrite)
             {
                 keysWrite.Add(dadInt.Key);
             }
@@ -47,7 +66,6 @@ namespace TransactionManager
                 channel.Lease(leaseRequest);
             }
 
-            var response = new TransactionResponse();
             return Task.FromResult(response);
         }
 
@@ -60,7 +78,6 @@ namespace TransactionManager
 
         public override Task<AcknowledgeConsensusResponse> AcknowledgeConsensus(AcknowledgeConsensusRequest request, ServerCallContext context)
         {
-
             AcknowledgeConsensusResponse response = new AcknowledgeConsensusResponse();
             return Task.FromResult(response);
         }
