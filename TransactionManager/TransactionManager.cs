@@ -95,13 +95,29 @@ namespace TransactionManager
             foreach (int clusterId in this.getLeaseManagersServices().Keys)
             {
                 LeaseManagerService.LeaseManagerServiceClient channel = this.getLeaseManagersServices()[clusterId].Item2;
-                channel.Status_LM(new StatusRequest_LM { });
+                try
+                {
+                    channel.Status_LM(new StatusRequest_LM { });
+                }
+                catch (Exception ex)
+                {
+                    this.Logger("Caught Exception " + ex.Message);
+                    ids_lmServices.Remove(clusterId);
+                }
             }
 
             foreach (int clusterId in this.getTransactionManagersServices().Keys)
             {
                 TransactionManagerService.TransactionManagerServiceClient channel = this.getTransactionManagersServices()[clusterId].Item2;
-                channel.Status_TM(new StatusRequest_TM { });
+                try
+                {
+                    channel.Status_TM(new StatusRequest_TM { });
+                }
+                catch (Exception ex)
+                {
+                    this.Logger("Caught Exception " + ex.Message);
+                    ids_tmServices.Remove(clusterId);
+                }
             }
         }
     }

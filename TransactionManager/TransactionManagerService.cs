@@ -53,7 +53,7 @@ namespace TransactionManager
 
         public override Task<StatusReply> Status(StatusRequest statusRequest, ServerCallContext context)
         {
-            transactionManager.Logger("I'm Alive");
+            Console.WriteLine("I'm Alive");
             transactionManager.sendStatusRequests();
             var reply = new StatusReply();
             return Task.FromResult(reply);

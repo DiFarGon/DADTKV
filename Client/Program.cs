@@ -4,7 +4,7 @@ namespace Client
 {
     internal class Program
     {
-        // <id> <url> <tm_url> <tms> <startTime> <debug?>
+        // <id> <url> <tm_id> <tms> <startTime> <debug?>
 
         public static void Main(string[] args)
         {
@@ -22,28 +22,29 @@ namespace Client
                 debug = true;
             }
 
-            int port = new Uri(args[2]).Port;
-            string url = $"http://localhost:{port}";
-
             Thread.Sleep(7000);
 
-            Client client = new Client(args[0], url, debug);
+            Client client = new Client(args[0], args[2], debug, args[3]);
 
-            foreach (string line in script)
+            ///Reads script in a loop
+            while (true)
             {
-                switch (line[0])
+                foreach (string line in script)
                 {
-                    case '#':
-                        continue;
-                    case 'T':
-                        client.handleT(line);
-                        break;
-                    case 'W':
-                        client.handleW(line);
-                        break;
-                    case 'S':
-                        client.handleS();
-                        break;
+                    switch (line[0])
+                    {
+                        case '#':
+                            continue;
+                        case 'T':
+                            client.handleT(line);
+                            break;
+                        case 'W':
+                            client.handleW(line);
+                            break;
+                        case 'S':
+                            client.handleS();
+                            break;
+                    }
                 }
             }
 

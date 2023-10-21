@@ -122,7 +122,7 @@ namespace dadtkv
 
             this.Logger($"Creating new client with id '{client.getId()}' and url '{client.getUrl()}'");
             
-            string arguments = $"{client.getId()} {client.getUrl()} {this.assignTransactionManager().getUrl()} {this.getAllTransactionManagersString()} {this.startTime}";
+            string arguments = $"{client.getId()} {client.getUrl()} {this.assignTransactionManager().getId()} {this.getAllTransactionManagersString()} {this.startTime}";
             if (this.debug) { arguments += " debug"; }
 
             if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
