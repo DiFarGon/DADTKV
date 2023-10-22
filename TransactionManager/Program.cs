@@ -41,7 +41,13 @@ namespace TransactionManager
             transactionManager.setTmClusterNodes(args[4]);
             transactionManager.setLmClusterNodes(args[3]);
 
-            while (true) ;
+            DateTime beggining = DateTime.Now;
+
+            while (true)
+            {
+                if (DateTime.Now - beggining > TimeSpan.FromSeconds(30))
+                    break;
+            };
         }
     }
 }

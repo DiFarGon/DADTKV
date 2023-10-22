@@ -50,7 +50,7 @@ namespace TransactionManager
 
         public void setTmClusterNodes(string tms)
         {
-            string[] keyValuePairs = tms.Split(';', StringSplitOptions.RemoveEmptyEntries);
+            string[] keyValuePairs = tms.Split('!', StringSplitOptions.RemoveEmptyEntries);
 
             foreach (string pair in keyValuePairs)
             {
@@ -68,10 +68,14 @@ namespace TransactionManager
 
         public void setLmClusterNodes(string lms)
         {
-            string[] keyValuePairs = lms.Split(';', StringSplitOptions.RemoveEmptyEntries);
+            string[] keyValuePairs = lms.Split('!', StringSplitOptions.RemoveEmptyEntries);
+
+            int count = 0;
 
             foreach (string pair in keyValuePairs)
             {
+                count++;
+
                 string[] parts = pair.Split('-');
                 int n = int.Parse(parts[0]);
                 string id = parts[1];
@@ -81,7 +85,7 @@ namespace TransactionManager
                 LeaseManagerService.LeaseManagerServiceClient client = new LeaseManagerService.LeaseManagerServiceClient(channel);
                 this.ids_lmServices[n] = (id, client);
             }
-            this.Logger("set lease managers");
+            this.Logger($"set lease managers, cluster with {count} nodes");
         }
     }
 }

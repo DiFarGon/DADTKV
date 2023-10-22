@@ -24,7 +24,7 @@ namespace Client
             this.debug = debug;
 
             this.Logger("created");
-            Thread.Sleep(1000);
+            Thread.Sleep(5000);
             this.channel = GrpcChannel.ForAddress(this.tmUrl);
             this.client = new ClientService.ClientServiceClient(channel);
         }
