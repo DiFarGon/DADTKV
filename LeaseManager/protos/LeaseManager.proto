@@ -1,8 +1,6 @@
 syntax = "proto3";
 
 service LeaseManagerService {
-    // RPC for exchanging control messages with other lease managers
-    rpc ControlLM(ControlLMRequest) returns (ControlLMResponse);
     
     rpc Lease(LeaseRequest) returns (LeaseResponse);
     rpc Status_LM(StatusRequest_LM) returns (StatusReply_LM);
@@ -40,54 +38,60 @@ message LeaseRequest {
 message LeaseResponse { }
 
 message PrepareRequest {
-    int32 lm_id = 1;
-    int32 round_id = 2;
+    int32 id = 1;
+    int32 ballotId = 2;
+    repeated int32 unresolvedInstances = 3;    
 }
 
-// TODO: understand what value should be exactly (list of leases? leases in queue and leases granted(state)?)
 message PrepareResponse {
-    int32 lm_id = 1;
-    int32 round_id = 2; 
-
-    bool ack = 3;
-
-    // only for ack = false
-    int32 last_promised_round = 4; //change name to readTS and the write as awell
-    int32 last_promised_round_node_id = 5;
-
-    // only for ack = true and if this already accepted a value
-    int32 last_accepted_round = 6; 
-    int32 last_accepted_round_node_id = 7;
-    repeated string last_accepted_value = 8; // only for ack = true and if this already accepted a value
+    int32 id = 1;
+    bool ok = 2;
+    int32 mostRecentReadTS = 3; // ok = false
+    map<int32, InstanceState_grpc> instancesStates = 4; // used by a node trying to become a leader to know what to do with unresolved past instances 
 }
 
 message AcceptRequest {
-    int32 lm_id = 1;
-    int32 round_id = 2;
-
-    repeated string value = 3;
+    int32 id = 1;
+    int32 instanceId = 2;
+    int32 ballotId = 3;
+    LeasesList_grpc value = 4;
 }
 
 message AcceptResponse {
-    int32 lm_id = 1;
-    int32 round_id = 2;
-
-    bool ack = 3;
-    int32 last_promised_round_id = 4; // only for ack = false
+    int32 id = 1;
+    int32 instanceId = 2;
+    bool ok = 3;
+    int32 mostRecentReadTS = 4; // ok = false
 }
 
-message AcceptedRequest {
-    int32 lm_id = 1;
-    int32 round_id = 2;
-
-    repeated string value = 3;
+message DecidedRequest {
+    int32 id = 1;
+    int32 instanceId = 2;
+    int32 ballotId = 3;
+    LeasesList_grpc value = 4;
 }
 
-message AcceptedResponse {
-    int32 lm_id = 1;
-    int32 round_id = 2;
-
-    bool ack = 3;
+message DecidedResponse {
+    int32 id = 1;
+    int32 instanceId = 2;
+    int32 ballotId = 3;
+    bool ok = 4;
 }
 
+
+message InstanceState_grpc {
+    int32 writeTS = 1;
+    int32 readTS = 2;
+    LeasesList_grpc value = 3;
+    bool decided = 4;
+}
+
+message Lease_grpc {
+    string clientId = 1;
+    repeated string dataKeys = 2;
+}
+
+message LeasesList_grpc {
+    repeated Lease_grpc leases = 1;
+}
 
