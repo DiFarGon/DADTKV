@@ -30,5 +30,12 @@ namespace LeaseManager
                 }
             }
         }
+
+        public override bool Equals(object? obj)
+        {
+            return obj is Lease lease &&
+                   TmId == lease.TmId &&
+                   EqualityComparer<List<string>>.Default.Equals(Keys, lease.Keys);
+        }
     }
 }

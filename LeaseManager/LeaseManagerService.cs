@@ -15,139 +15,77 @@ namespace LeaseManager
             this.leaseManager = leaseManager;
         }
 
-        public override Task<ControlLMResponse> ControlLM(ControlLMRequest request, ServerCallContext context)
-        {
-            ControlLMResponse response = new ControlLMResponse();
-            response.LmId = leaseManager.getClusterId();
-
-            Console.WriteLine($"[LeaseManager {leaseManager.getClusterId()}]\tControl request received from {request.LmId}");
-
-            return Task.FromResult(response);
-        }
-
         public override Task<LeaseResponse> Lease(LeaseRequest request, ServerCallContext context)
         {
+            leaseManager.registerLease(request.TmId, request.Keys.ToList());
             LeaseResponse response = new LeaseResponse();
+            return Task.FromResult(response);
+        }
 
-            leaseManager.Logger($"Received lease request from {request.TmId}");
+        public override Task<PrepareResponse> Prepare(PrepareRequest request, ServerCallContext context)
+        {
+            PaxosNode paxosNode = leaseManager.getPaxosNode();
+
+            PrepareResponse response = new PrepareResponse();
+
+            if (request.BallotId > paxosNode.getMostRecentReadTS())
+            {
+                response.Ok = true;
+                foreach (int instanceId in request.UnresolvedInstances)
+                {
+                    response.InstancesStates.Add(instanceId, PaxosNode.instanceStateToGrpcInstanceState(paxosNode.getInstanceState(instanceId)));
+                }
+                paxosNode.setMostRecentReadTS(request.BallotId);
+                paxosNode.setRoundId((request.BallotId - request.Id) / paxosNode.getClusterSize());
+                paxosNode.setLastKnownLeader(request.Id);
+                if (paxosNode.isLeader())
+                {
+                    paxosNode.setLeader(false);
+                }
+            }
+            else
+            {
+                response.Ok = false;
+                response.MostRecentReadTS = paxosNode.getMostRecentReadTS();
+            }
 
             return Task.FromResult(response);
         }
 
-        public override Task<Prepare1Response> Prepare1(Prepare1Request request, ServerCallContext context)
+        public override Task<AcceptResponse> Accept(AcceptRequest request, ServerCallContext context)
         {
-            Prepare1Response response = new Prepare1Response();
+            PaxosNode paxosNode = leaseManager.getPaxosNode();
 
-            int prepareRound = request.RoundId;
-            int senderId = request.LmId;
+            AcceptResponse response = new AcceptResponse();
 
-            lock (leaseManager)
+            if (request.BallotId == paxosNode.getMostRecentReadTS())
             {
-                (int, int) readTS = leaseManager.getReadTS();
-                (int, int) writeTS = leaseManager.getWriteTS();
-
-                leaseManager.Logger($"Prepare request received from (P{senderId})");
-
-                // the roundId of the prepare is not the greatest roundId this lm has seen (is not the greatest RTS), send back nack(RTS)
-                if ((prepareRound < readTS.Item1) || (prepareRound == readTS.Item1 && senderId < readTS.Item2))
-                {
-                    leaseManager.Logger($"Prepare request refused from (P{senderId}), roundId ({prepareRound}, {senderId}) < readTS {readTS}");
-                    response.Ack = false;
-                    response.LastPromisedRound = readTS.Item1;
-                    response.LastAcceptedRoundNodeId = readTS.Item2;
-
-                }
-                // the incoming prepare msg has a roundId greater than this node's RTS, send back promise
+                response.Ok = true;
+                paxosNode.setInstanceStateWriteTS(request.InstanceId, request.BallotId);
+                if (request.Value == null)
+                    paxosNode.setInstanceStateValue(request.InstanceId, null);
                 else
-                {
-                    leaseManager.Logger($"Prepare request accepted from {senderId}, roundId ({prepareRound}, {senderId}) > readTS {readTS}");
-                    leaseManager.setLastPromisedRound(prepareRound, senderId);
-
-                    response.Ack = true;
-                    if (writeTS.Item1 != 0)
-                    {
-                        leaseManager.Logger($"In sent promise, lastAcceptedRoundId is {writeTS}");
-                        response.LastAcceptedRound = writeTS.Item1;
-                        response.LastAcceptedRoundNodeId = writeTS.Item2;
-                        response.LastAcceptedValue.AddRange(leaseManager.getLastAcceptedValue()); // TODO: understand what value should be exactly (list of leases? leases in queue and leases granted(state)?)
-                    }
-                }
+                    paxosNode.setInstanceStateValue(request.InstanceId, PaxosNode.grpcLeasesListToLeasesList(request.Value));
             }
+            else
+            {
+                // TODO: should i also check if the receiving node is a leader and if so, remove leadership? i already do this in the client code
+                response.Ok = false;
+                response.MostRecentReadTS = paxosNode.getMostRecentReadTS();
+            }
+
             return Task.FromResult(response);
         }
 
-        public override Task<Accept1Response> Accept1(Accept1Request request, ServerCallContext context)
+        public override Task<DecidedResponse> Decided(DecidedRequest request, ServerCallContext context)
         {
-            Accept1Response response = new Accept1Response();
+            // FIXME: need to do more stuff here, e.g. send to clients?
+            PaxosNode paxosNode = leaseManager.getPaxosNode();
 
-            int acceptRound = request.RoundId;
-            int senderId = request.LmId;
+            DecidedResponse response = new DecidedResponse();
 
-            lock (leaseManager)
-            {
-                (int, int) readTS = leaseManager.getReadTS();
+            paxosNode.setInstanceStateDecided(request.InstanceId);
 
-                leaseManager.Logger($"Accept request received from {senderId}");
-
-                if (acceptRound < readTS.Item1 || (acceptRound == readTS.Item1 && senderId < readTS.Item2))
-                {
-                    leaseManager.Logger($"Accept request refused from {senderId}, acceptRound ({acceptRound}) < readTS {readTS}");
-                    response.Ack = false;
-                    response.LastPromisedRoundId = readTS.Item1;
-                }
-                else
-                {
-                    leaseManager.Logger($"Accept request accepted from {senderId}, acceptRound ({acceptRound}) > readTS {readTS}");
-                    leaseManager.setLastAcceptedRound(acceptRound, senderId);
-
-                    // FIXME: the value is still TBD, what should it be?
-                    leaseManager.setLastAcceptedValue(request.Value.ToList());
-
-                    leaseManager.broadcastAcceptedMsg();
-
-                    response.Ack = true;
-                }
-            }
-            return Task.FromResult(response);
-        }
-
-        public override Task<Accepted1Response> Accepted1(Accepted1Request request, ServerCallContext context)
-        {
-            Accepted1Response response = new Accepted1Response();
-
-            int acceptedRound = request.RoundId;
-            int senderId = request.LmId;
-
-            lock (leaseManager)
-            {
-                (int, int) readTS = leaseManager.getReadTS();
-
-                leaseManager.Logger($"Accepted received from P{senderId}");
-
-                //  TODO: not sure if this case is required
-                if (acceptedRound < readTS.Item1 || (acceptedRound == readTS.Item1 && senderId < readTS.Item2))
-                {
-                    leaseManager.Logger($"Accepted request refused from {senderId}, acceptedRoundId ({acceptedRound}) does not refer to readTS {readTS}");
-                    response.Ack = false;
-                }
-                else
-                {
-                    response.Ack = true;
-                    leaseManager.incAcceptedCount();
-                    if (leaseManager.isAcceptedQuorom())
-                    {
-                        leaseManager.Logger($"Accepted request accepted from {request.LmId}, acceptedRoundId ({acceptedRound}), received a quorum of accepted so, consensus reached!");
-                        leaseManager.setDecided(true);
-                        // FIXME: what does a LM do when it knows a consensus has been reached? Eventually sends the decision to the TMs right?
-                        // FIXME: continue here, send decision to TMS!
-                    }
-                    else
-                    {
-                        leaseManager.Logger($"Accepted request accepted from {request.LmId}, acceptedRoundId ({acceptedRound}), has received {leaseManager.getAcceptedReceivedCount()} accepteds so far");
-
-                    }
-                }
-            }
             return Task.FromResult(response);
         }
     }
