@@ -3,10 +3,31 @@ syntax = "proto3";
 service LeaseManagerService {
     
     rpc Lease(LeaseRequest) returns (LeaseResponse);
+    rpc Status_LM(StatusRequest_LM) returns (StatusReply_LM);
 
     rpc Prepare(PrepareRequest) returns (PrepareResponse);
     rpc Accept(AcceptRequest) returns (AcceptResponse);
-    rpc Decided(DecidedRequest) returns (DecidedResponse);
+    // when a node accepts a AcceptRequest, it should send a message to all nodes saying it accepted for round_id the value v 
+    // because if any node receives a majority of these messages (for the same round_id), itconsensus has been achieved for that paxos instance
+    rpc Accepted(AcceptedRequest) returns (AcceptedResponse);
+}
+
+message StatusRequest_LM{
+
+}
+
+message StatusReply_LM{
+
+}
+
+message ControlLMRequest {
+    // Unique identifier for the request
+    int32 lm_id = 1;
+}
+
+message ControlLMResponse {
+    // Acknowledgment of request reception
+    int32 lm_id = 1;
 }
 
 message LeaseRequest {

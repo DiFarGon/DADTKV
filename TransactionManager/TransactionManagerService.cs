@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using System.Transactions;
 
 namespace TransactionManager
 {
@@ -43,7 +44,7 @@ namespace TransactionManager
             foreach (int clusterId in transactionManager.getLeaseManagersServices().Keys)
             {
                 LeaseManagerService.LeaseManagerServiceClient channel = transactionManager.getLeaseManagersServices()[clusterId].Item2;
-                channel.Lease(leaseRequest);
+                channel.LeaseAsync(leaseRequest);
             }
 
             var reply = new TransactionReply();
@@ -52,9 +53,28 @@ namespace TransactionManager
 
         public override Task<StatusReply> Status(StatusRequest statusRequest, ServerCallContext context)
         {
-            transactionManager.Logger("I'm Alive");
+            Console.WriteLine("I'm Alive");
+            transactionManager.sendStatusRequests();
             var reply = new StatusReply();
             return Task.FromResult(reply);
         }
+
+
     }
+    class TransactionManagerServiceImpl_TM : TransactionManagerService.TransactionManagerServiceBase
+    {
+        TransactionManager transactionManager;
+        public TransactionManagerServiceImpl_TM(TransactionManager transactionManager)
+        {
+            this.transactionManager = transactionManager;
+        }
+
+        public override Task<StatusReply_TM> Status_TM(StatusRequest_TM request, ServerCallContext context)
+        {
+            transactionManager.Logger("I'm Alive");
+            var reply = new StatusReply_TM();
+            return Task.FromResult(reply);
+        }
+    }
+
 }
