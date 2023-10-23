@@ -136,7 +136,8 @@ namespace TransactionManager
         /// <summary>
         /// Attempts to execute the first pending transaction. If it succeeds
         /// sets the TaskCompletionSource.Result to the adequate response value
-        /// and removes the transaction from the pending list
+        /// and removes the transaction from the pending list, attempting to
+        /// execute the next one.
         /// </summary>
         public void AttemptFirstTransaction()
         {
@@ -158,6 +159,7 @@ namespace TransactionManager
                     response.Read.AddRange(dadIntMessages);
                     tcs.SetResult(response);
                     this.pendingTransactions.RemoveAt(0);
+                    this.AttemptFirstTransaction();
             }
         }
 
