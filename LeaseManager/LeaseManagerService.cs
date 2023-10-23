@@ -69,7 +69,6 @@ namespace LeaseManager
             }
             else
             {
-                // TODO: should i also check if the receiving node is a leader and if so, remove leadership? i already do this in the client code
                 response.Ok = false;
                 response.MostRecentReadTS = paxosNode.getMostRecentReadTS();
             }
@@ -79,7 +78,6 @@ namespace LeaseManager
 
         public override Task<DecidedResponse> Decided(DecidedRequest request, ServerCallContext context)
         {
-            // FIXME: need to do more stuff here, e.g. send to clients?
             PaxosNode paxosNode = leaseManager.getPaxosNode();
 
             DecidedResponse response = new DecidedResponse();

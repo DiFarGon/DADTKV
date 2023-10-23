@@ -2,15 +2,23 @@ syntax = "proto3";
 
 service TransactionManagerService {
     // RPC for exchanging control messages with other lease managers
-    rpc ControlTM(ControlTMRequest) returns (ControlTMResponse);
+    rpc InstanceResult(InstanceResultRequest) returns (InstanceResultResponse);
 }
 
-message ControlTMRequest {
-    // Unique identifier for the request
-    string tm_id = 1;
+message InstanceResultRequest {
+    int32 lm_id = 1;
+    int32 instance_id = 2;
+    LeasesList_grpc result = 3;
 }
 
-message ControlTMResponse {
-    // Acknowledgment of request reception
-    string tm_id = 1;
+message InstanceResultResponse {}
+
+
+message Lease_grpc {
+    string clientId = 1;
+    repeated string dataKeys = 2;
+}
+
+message LeasesList_grpc {
+    repeated Lease_grpc leases = 1;
 }

@@ -15,6 +15,7 @@ namespace LeaseManager
     public class LeaseManager
     {
         private string id;
+        private int clusterId;
         private string url;
         private bool debug;
         private PaxosNode paxosNode;
@@ -34,6 +35,7 @@ namespace LeaseManager
         public LeaseManager(int clusterId, string id, string url, int timeSlotDuration, List<List<bool>> failureSuspicions, bool debugMode)
         {
             this.id = id;
+            this.clusterId = clusterId;
             this.url = url;
             this.debug = debugMode;
 
@@ -118,9 +120,35 @@ namespace LeaseManager
             paxosNode.addLeaseToQueue(lease);
         }
 
+        public void notifyClients()
+        {
+            if (paxosNode.getInstanceState(paxosNode.getNextInstanceToNotify()).decided)
+            {
+                InstanceResultRequest request = new InstanceResultRequest()
+                {
+                    LmId = clusterId,
+                    InstanceId = paxosNode.getNextInstanceToNotify(),
+                };
+
+                if (!paxosNode.getInstanceState(paxosNode.getNextInstanceToNotify()).no_op)
+                    request.Result = PaxosNode.leasesListToGrpcLeasesList(paxosNode.getInstanceState(paxosNode.getNextInstanceToNotify()).value); // TODO: might be a problem here because the return type of PaxosNode.leasesListToGrpcLeasesList is a LeasesList_grpc from the LeaseManager proto and not the TransactionManager one
+                else
+                    request.Result = null;
+
+                foreach (KeyValuePair<int, (string, TransactionManagerService.TransactionManagerServiceClient)> entry in ids_tmsServices)
+                {
+                    entry.Value.Item2.InstanceResult(request);
+                }
+                paxosNode.setNextInstanceToNotify(paxosNode.getNextInstanceToNotify() + 1);
+            }
+        }
+
+
         public void startService()
         {
-            Timer timer = new Timer(state => paxosNode.runPaxosInstance(), null, 0, timeSlotDuration);
+            Timer paxosTimer = new Timer(state => paxosNode.runPaxosInstance(), null, 0, timeSlotDuration);
+
+            Timer notifyClientsTimer = new Timer(state => notifyClients(), null, 0, timeSlotDuration);
         }
     }
 }

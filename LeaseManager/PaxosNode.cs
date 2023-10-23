@@ -43,6 +43,7 @@ namespace LeaseManager
         private int ballotId; // combination of nodes id and round id (e.g. for node 1 and round 2, ballotId = 2 * clusterSize + 1 = 3)
         private int mostRecentReadTS = 0;
         private ConcurrentDictionary<int, InstanceState> instancesStates = new ConcurrentDictionary<int, InstanceState>();
+        private int nextInstanceToNotify = 0;
 
         private List<Lease> leasesQueue = new List<Lease>(); // leases that have not been handled yet, key is the lease and value is the number of times it has been requested
 
@@ -59,6 +60,16 @@ namespace LeaseManager
                 leader = true;
             }
 
+        }
+
+        public int getNextInstanceToNotify()
+        {
+            return nextInstanceToNotify;
+        }
+
+        public void setNextInstanceToNotify(int instanceId)
+        {
+            nextInstanceToNotify = instanceId;
         }
 
         public void setClusterNodes(Dictionary<int, GrpcChannel> channels)
@@ -277,7 +288,6 @@ namespace LeaseManager
             }
             // FIXME: should the lease manager also send to the clients?
         }
-
 
         private List<Lease> calcValueToPropose()
         {
