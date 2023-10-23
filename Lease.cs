@@ -82,6 +82,15 @@ namespace Lease
         }
 
         /// <summary>
+        /// Default hash function
+        /// </summary>
+        /// <returns>a hash code for the current object</returns>
+        public override int GetHashCode()
+        {
+            return base.GetHashCode();
+        }
+
+        /// <summary>
         /// Checks if two leases are equal
         /// </summary>
         /// <param name="left"></param>

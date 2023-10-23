@@ -110,6 +110,13 @@ namespace TransactionManager
         /// </summary>
         private void UpdateHeldLeases()
         {
+            // FIXME: what if theres a conflicting lease in the current leases list
+            //        when this update happens?
+            //        if we immediately consider this lease as held concurrency problems arise
+            //        who gets the lease and who doesn't?
+            //        do lease managers even assign conflicting leases for the same epoch
+            //        in the first place?
+            //        so many questions
             foreach(Lease.Lease lease in this.currentLeases)
             {
                 if (this.heldLeases.Contains(lease)) continue;
@@ -119,7 +126,7 @@ namespace TransactionManager
 
         /// <summary>
         /// Detects if there are any currently held Leases conflicting with
-        /// newly attributed Leases and in the affirmative case releases it
+        /// newly assigned Leases and in the affirmative case releases it
         /// after attempting to execute a single transaction
         /// </summary>
         private void ReleaseConflictingLeases()
