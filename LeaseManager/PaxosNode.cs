@@ -43,7 +43,7 @@ namespace LeaseManager
         private int ballotId; // combination of nodes id and round id (e.g. for node 1 and round 2, ballotId = 2 * clusterSize + 1 = 3)
         private int mostRecentReadTS = 0;
         private ConcurrentDictionary<int, InstanceState> instancesStates = new ConcurrentDictionary<int, InstanceState>();
-        private int nextInstanceToNotify = 0;
+        private int lastNotifiedInstance = 0;
 
         private List<Lease> leasesQueue = new List<Lease>(); // leases that have not been handled yet, key is the lease and value is the number of times it has been requested
 
@@ -62,14 +62,14 @@ namespace LeaseManager
 
         }
 
-        public int getNextInstanceToNotify()
+        public int getLastNotifiedInstance()
         {
-            return nextInstanceToNotify;
+            return lastNotifiedInstance;
         }
 
-        public void setNextInstanceToNotify(int instanceId)
+        public void setLastNotifiedInstance(int instanceId)
         {
-            nextInstanceToNotify = instanceId;
+            lastNotifiedInstance = instanceId;
         }
 
         public void setClusterNodes(Dictionary<int, GrpcChannel> channels)
@@ -176,7 +176,7 @@ namespace LeaseManager
                         if (kvp.Value.WriteTS > instancesStates[kvp.Key].writeTS)
                         {
                             instancesStates[kvp.Key].writeTS = kvp.Value.WriteTS;
-                            instancesStates[kvp.Key].value = grpcLeasesListToLeasesList(kvp.Value.Value);
+                            instancesStates[kvp.Key].value = LeasesListMessageToLeasesList(kvp.Value.Value);
                         }
                     }
 
@@ -223,7 +223,7 @@ namespace LeaseManager
                 {
                     valueToPropose = calcValueToPropose();
                 }
-                request.Value = leasesListToGrpcLeasesList(valueToPropose);
+                request.Value = leasesListToLeasesListMessage(valueToPropose);
             }
 
             List<Task<AcceptResponse>> responseTasks = new List<Task<AcceptResponse>>();
@@ -262,8 +262,6 @@ namespace LeaseManager
                 else
                 {
                     acceptsCount++;
-
-                    // FIXME: here the node sending the accepts should broadcast decided msgs (to all learners?) for this instance
                     if (acceptsCount > paxosClusterNodes.Count / 2)
                     {
                         broadcastDecided(response.InstanceId);
@@ -279,14 +277,13 @@ namespace LeaseManager
                 Id = this.id,
                 InstanceId = instance,
                 BallotId = ballotId,
-                Value = leasesListToGrpcLeasesList(instancesStates[instance].value),
+                Value = leasesListToLeasesListMessage(instancesStates[instance].value),
             };
 
             foreach (KeyValuePair<int, LeaseManagerService.LeaseManagerServiceClient> pair in paxosClusterNodes)
             {
-                DecidedResponse response = pair.Value.Decided(request);
+                pair.Value.Decided(request);
             }
-            // FIXME: should the lease manager also send to the clients?
         }
 
         private List<Lease> calcValueToPropose()
@@ -345,9 +342,9 @@ namespace LeaseManager
             return paxosClusterNodes.Count;
         }
 
-        public static Lease_grpc leaseToGrpcLease(Lease lease)
+        public static LeaseMessageLM leaseToLeaseMessage(Lease lease)
         {
-            Lease_grpc lease_Grpc = new Lease_grpc
+            LeaseMessageLM lease_Grpc = new LeaseMessageLM
             {
                 ClientId = lease.TmId,
             };
@@ -356,25 +353,25 @@ namespace LeaseManager
             return lease_Grpc;
         }
 
-        public static LeasesList_grpc leasesListToGrpcLeasesList(List<Lease> leases)
+        public static LeasesListMessageLM leasesListToLeasesListMessage(List<Lease> leases)
         {
-            LeasesList_grpc leasesList_Grpc = new LeasesList_grpc();
+            LeasesListMessageLM leasesList_Grpc = new LeasesListMessageLM();
             foreach (Lease lease in leases)
-                leasesList_Grpc.Leases.Add(leaseToGrpcLease(lease));
+                leasesList_Grpc.Leases.Add(leaseToLeaseMessage(lease));
             return leasesList_Grpc;
         }
 
-        public static Lease grpcLeaseToLease(Lease_grpc lease_Grpc)
+        public static Lease LeaseMessageToLease(LeaseMessageLM lease_Grpc)
         {
             Lease lease = new Lease(lease_Grpc.ClientId, lease_Grpc.DataKeys.ToList());
             return lease;
         }
 
-        public static List<Lease> grpcLeasesListToLeasesList(LeasesList_grpc value)
+        public static List<Lease> LeasesListMessageToLeasesList(LeasesListMessageLM value)
         {
             List<Lease> leases = new List<Lease>();
-            foreach (Lease_grpc lease_Grpc in value.Leases)
-                leases.Add(grpcLeaseToLease(lease_Grpc));
+            foreach (LeaseMessageLM lease in value.Leases)
+                leases.Add(LeaseMessageToLease(lease));
             return leases;
         }
 
@@ -383,16 +380,16 @@ namespace LeaseManager
             return instancesStates[instanceId];
         }
 
-        public static InstanceState_grpc instanceStateToGrpcInstanceState(InstanceState instanceState)
+        public static InstanceStateMessage instanceStateToInstanceStateMessage(InstanceState instanceState)
         {
-            InstanceState_grpc instanceState_Grpc = new InstanceState_grpc
+            InstanceStateMessage instanceStateMessage = new InstanceStateMessage
             {
                 ReadTS = instanceState.readTS,
                 WriteTS = instanceState.writeTS,
-                Value = leasesListToGrpcLeasesList(instanceState.value),
+                Value = leasesListToLeasesListMessage(instanceState.value),
                 Decided = instanceState.decided,
             };
-            return instanceState_Grpc;
+            return instanceStateMessage;
         }
 
         public void setInstanceStateWriteTS(int instanceId, int wts)

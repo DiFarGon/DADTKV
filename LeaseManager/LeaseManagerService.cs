@@ -16,17 +16,7 @@ namespace LeaseManager
             this.leaseManager = leaseManager;
         }
 
-        public override Task<ControlLMResponse> ControlLM(ControlLMRequest request, ServerCallContext context)
-        {
-            ControlLMResponse response = new ControlLMResponse();
-            response.LmId = leaseManager.getClusterId();
-
-            //Console.WriteLine($"[LeaseManager {leaseManager.getClusterId()}]\tControl request received from {request.LmId}");
-
-            return Task.FromResult(response);
-        }
-
-        public override Task<LeaseResponse> Lease(LeaseRequest request,  ServerCallContext context)
+        public override Task<LeaseResponse> Lease(LeaseRequest request, ServerCallContext context)
         {
             leaseManager.registerLease(request.TmId, request.Keys.ToList());
             LeaseResponse response = new LeaseResponse();
@@ -44,7 +34,7 @@ namespace LeaseManager
                 response.Ok = true;
                 foreach (int instanceId in request.UnresolvedInstances)
                 {
-                    response.InstancesStates.Add(instanceId, PaxosNode.instanceStateToGrpcInstanceState(paxosNode.getInstanceState(instanceId)));
+                    response.InstancesStates.Add(instanceId, PaxosNode.instanceStateToInstanceStateMessage(paxosNode.getInstanceState(instanceId)));
                 }
                 paxosNode.setMostRecentReadTS(request.BallotId);
                 paxosNode.setRoundId((request.BallotId - request.Id) / paxosNode.getClusterSize());
@@ -76,7 +66,7 @@ namespace LeaseManager
                 if (request.Value == null)
                     paxosNode.setInstanceStateValue(request.InstanceId, null);
                 else
-                    paxosNode.setInstanceStateValue(request.InstanceId, PaxosNode.grpcLeasesListToLeasesList(request.Value));
+                    paxosNode.setInstanceStateValue(request.InstanceId, PaxosNode.LeasesListMessageToLeasesList(request.Value));
             }
             else
             {
@@ -98,11 +88,5 @@ namespace LeaseManager
             return Task.FromResult(response);
         }
 
-        public override Task<StatusReply_LM> Status_LM(StatusRequest_LM request, ServerCallContext context)
-        {
-            leaseManager.Logger("I'm Alive");
-            var reply = new StatusReply_LM();
-            return Task.FromResult(reply);
-        }
     }
 }

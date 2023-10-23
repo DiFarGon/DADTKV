@@ -3,31 +3,9 @@ syntax = "proto3";
 service LeaseManagerService {
     
     rpc Lease(LeaseRequest) returns (LeaseResponse);
-    rpc Status_LM(StatusRequest_LM) returns (StatusReply_LM);
-
     rpc Prepare(PrepareRequest) returns (PrepareResponse);
     rpc Accept(AcceptRequest) returns (AcceptResponse);
-    // when a node accepts a AcceptRequest, it should send a message to all nodes saying it accepted for round_id the value v 
-    // because if any node receives a majority of these messages (for the same round_id), itconsensus has been achieved for that paxos instance
-    rpc Accepted(AcceptedRequest) returns (AcceptedResponse);
-}
-
-message StatusRequest_LM{
-
-}
-
-message StatusReply_LM{
-
-}
-
-message ControlLMRequest {
-    // Unique identifier for the request
-    int32 lm_id = 1;
-}
-
-message ControlLMResponse {
-    // Acknowledgment of request reception
-    int32 lm_id = 1;
+    rpc Decided(DecidedRequest) returns (DecidedResponse);
 }
 
 message LeaseRequest {
@@ -47,14 +25,14 @@ message PrepareResponse {
     int32 id = 1;
     bool ok = 2;
     int32 mostRecentReadTS = 3; // ok = false
-    map<int32, InstanceState_grpc> instancesStates = 4; // used by a node trying to become a leader to know what to do with unresolved past instances 
+    map<int32, InstanceStateMessage> instancesStates = 4; // used by a node trying to become a leader to know what to do with unresolved past instances 
 }
 
 message AcceptRequest {
     int32 id = 1;
     int32 instanceId = 2;
     int32 ballotId = 3;
-    LeasesList_grpc value = 4;
+    LeasesListMessageLM value = 4;
 }
 
 message AcceptResponse {
@@ -68,7 +46,7 @@ message DecidedRequest {
     int32 id = 1;
     int32 instanceId = 2;
     int32 ballotId = 3;
-    LeasesList_grpc value = 4;
+    LeasesListMessageLM value = 4;
 }
 
 message DecidedResponse {
@@ -79,19 +57,18 @@ message DecidedResponse {
 }
 
 
-message InstanceState_grpc {
+message InstanceStateMessage {
     int32 writeTS = 1;
     int32 readTS = 2;
-    LeasesList_grpc value = 3;
+    LeasesListMessageLM value = 3;
     bool decided = 4;
 }
 
-message Lease_grpc {
+message LeaseMessageLM {
     string clientId = 1;
     repeated string dataKeys = 2;
 }
 
-message LeasesList_grpc {
-    repeated Lease_grpc leases = 1;
+message LeasesListMessageLM {
+    repeated LeaseMessageLM leases = 1;
 }
-

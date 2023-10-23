@@ -1,24 +1,23 @@
 syntax = "proto3";
 
 service TransactionManagerService {
-    // RPC for exchanging control messages with other lease managers
     rpc InstanceResult(InstanceResultRequest) returns (InstanceResultResponse);
 }
 
 message InstanceResultRequest {
     int32 lm_id = 1;
     int32 instance_id = 2;
-    LeasesList_grpc result = 3;
+    LeasesListMessageTM result = 3;
 }
 
 message InstanceResultResponse {}
 
 
-message Lease_grpc {
+message LeaseMessageTM {
     string clientId = 1;
     repeated string dataKeys = 2;
 }
 
-message LeasesList_grpc {
-    repeated Lease_grpc leases = 1;
+message LeasesListMessageTM {
+    repeated LeaseMessageTM leases = 1;
 }

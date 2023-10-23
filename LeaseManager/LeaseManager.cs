@@ -120,29 +120,54 @@ namespace LeaseManager
             paxosNode.addLeaseToQueue(lease);
         }
 
-        public void notifyClients()
+        public static LeaseMessageTM leaseToLeaseMessageTM(Lease lease)
         {
-            if (paxosNode.getInstanceState(paxosNode.getNextInstanceToNotify()).decided)
+            LeaseMessageTM leaseMessage = new LeaseMessageTM
             {
-                InstanceResultRequest request = new InstanceResultRequest()
-                {
-                    LmId = clusterId,
-                    InstanceId = paxosNode.getNextInstanceToNotify(),
-                };
-
-                if (!paxosNode.getInstanceState(paxosNode.getNextInstanceToNotify()).no_op)
-                    request.Result = PaxosNode.leasesListToGrpcLeasesList(paxosNode.getInstanceState(paxosNode.getNextInstanceToNotify()).value); // TODO: might be a problem here because the return type of PaxosNode.leasesListToGrpcLeasesList is a LeasesList_grpc from the LeaseManager proto and not the TransactionManager one
-                else
-                    request.Result = null;
-
-                foreach (KeyValuePair<int, (string, TransactionManagerService.TransactionManagerServiceClient)> entry in ids_tmsServices)
-                {
-                    entry.Value.Item2.InstanceResult(request);
-                }
-                paxosNode.setNextInstanceToNotify(paxosNode.getNextInstanceToNotify() + 1);
-            }
+                ClientId = lease.TmId,
+            };
+            foreach (string key in lease.Keys)
+                leaseMessage.DataKeys.Add(key);
+            return leaseMessage;
         }
 
+        public static LeasesListMessageTM leasesListToLeasesListMessageTM(List<Lease> leases)
+        {
+            LeasesListMessageTM leasesListMessage = new LeasesListMessageTM();
+            foreach (Lease lease in leases)
+                leasesListMessage.Leases.Add(leaseToLeaseMessageTM(lease));
+            return leasesListMessage;
+        }
+
+        public void notifyClients()
+        {
+            while (true)
+            {
+                int instanceToNotify = paxosNode.getLastNotifiedInstance() + 1;
+                if (paxosNode.getInstanceState(instanceToNotify).decided)
+                {
+                    InstanceResultRequest request = new InstanceResultRequest()
+                    {
+                        LmId = clusterId,
+                        InstanceId = instanceToNotify,
+                    };
+
+                    if (!paxosNode.getInstanceState(instanceToNotify).no_op)
+                        request.Result = leasesListToLeasesListMessageTM(paxosNode.getInstanceState(instanceToNotify).value);
+                    else
+                        request.Result = null;
+
+                    foreach (KeyValuePair<int, (string, TransactionManagerService.TransactionManagerServiceClient)> entry in ids_tmsServices)
+                    {
+                        entry.Value.Item2.InstanceResult(request);
+                    }
+                    paxosNode.setLastNotifiedInstance(instanceToNotify);
+                }
+                else
+                    break;
+
+            }
+        }
 
         public void startService()
         {
