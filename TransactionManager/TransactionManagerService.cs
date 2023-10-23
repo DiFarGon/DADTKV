@@ -29,9 +29,10 @@ namespace TransactionManager
         /// <param name="transactionRequest"></param>
         /// <param name="context"></param>
         /// <returns></returns>
-        public override Task<TransactionResponse> Transaction(TransactionRequest transactionRequest, ServerCallContext context)
+        public async override Task<TransactionResponse> Transaction(TransactionRequest transactionRequest, ServerCallContext context)
         {
             this.transactionManager.Logger("Received Transaction Request");
+            TaskCompletionSource<TransactionResponse> tcs = new TaskCompletionSource<TransactionResponse>();
 
             Transaction.Transaction transaction = new Transaction.Transaction(transactionRequest);
 
@@ -49,13 +50,17 @@ namespace TransactionManager
                 }
                 TransactionResponse response = new TransactionResponse();
                 response.Read.AddRange(dadIntMessages);
-                return Task.FromResult(response);
+                tcs.SetResult(response);
+                return tcs.Task.Result;
             }
 
-            // TODO: should await for lease to be conceded and transaction to be executed
-
             this.transactionManager.RequestLease(transaction);
-            return Task.FromResult(new TransactionResponse());
+
+            this.transactionManager.StageTransaction(transaction, tcs);
+
+            await tcs.Task;
+
+            return tcs.Task.Result;
         }
 
         /// <summary>

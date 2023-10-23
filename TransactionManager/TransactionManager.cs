@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using Grpc.Net.Client;
 using System.Transactions;
 using System.Threading.Tasks.Dataflow;
+using System.Net.NetworkInformation;
 
 namespace TransactionManager
 {
@@ -22,7 +23,7 @@ namespace TransactionManager
             new Dictionary<string, LeaseManagerService.LeaseManagerServiceClient>();
         private List<Lease.Lease> currentLeases = new List<Lease.Lease>();
         private List<Lease.Lease> heldLeases = new List<Lease.Lease>();
-        private List<Transaction.Transaction> pendingTransactions = new List<Transaction.Transaction>();
+        private List<(Transaction.Transaction, TaskCompletionSource<TransactionResponse> tcs)> pendingTransactions = new List<(Transaction.Transaction, TaskCompletionSource<TransactionResponse> tcs)>();
         private Dictionary<string, DadInt.DadInt> store = new Dictionary<string, DadInt.DadInt>();
 
         /// <summary>
@@ -120,22 +121,41 @@ namespace TransactionManager
         }
 
         /// <summary>
-        /// Add transaction to the pending transactions list
+        /// Add transaction to the pending transactions list as well as its corresponding
+        /// TaskCompletionSource
         /// </summary>
         /// <param name="transaction"></param>
-        public void StageTransaction(Transaction.Transaction transaction)
+        public void StageTransaction(Transaction.Transaction transaction, TaskCompletionSource<TransactionResponse> tcs)
         {
-            this.pendingTransactions.Add(transaction);
+            this.pendingTransactions.Add((transaction, tcs));
         }
 
         /// <summary>
-        /// Attempts to perform every pending transaction
+        /// Attempts to perform every pending transaction. If a transaction succeeds
+        /// sets its TaskCompletionSource result to the adequate TransactionResponse
         /// </summary>
         public void AttemptEveryTransaction() {
-            foreach (Transaction.Transaction transaction in this.pendingTransactions)
+            foreach ((Transaction.Transaction, TaskCompletionSource<TransactionResponse>) pair in this.pendingTransactions)
             {
-                this.pendingTransactions.Remove(transaction);
-                this.AttemptTransaction(transaction);
+                Transaction.Transaction transaction = pair.Item1;
+                TaskCompletionSource<TransactionResponse> tcs = pair.Item2;
+                (bool, List<DadInt.DadInt>) attemptedTransactionResult = this.AttemptTransaction(transaction);
+                if (attemptedTransactionResult.Item1)
+                {
+                    List<DadIntMessage> dadIntMessages = new List<DadIntMessage>();
+                    foreach (DadInt.DadInt dadInt in attemptedTransactionResult.Item2)
+                    {
+                        dadIntMessages.Add(new DadIntMessage
+                        {
+                            Key = dadInt.Key,
+                            Value = dadInt.Value
+                        });
+                    }
+                    TransactionResponse response = new TransactionResponse();
+                    response.Read.AddRange(dadIntMessages);
+                    tcs.SetResult(response);
+                    this.pendingTransactions.Remove(pair);
+                }
             }
         }
 
@@ -215,7 +235,6 @@ namespace TransactionManager
             {
                 return (true, this.ExecuteTransaction(transaction));
             }
-            this.StageTransaction(transaction);
             return (false, new List<DadInt.DadInt>());
         }
     }
