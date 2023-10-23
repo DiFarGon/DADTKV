@@ -95,7 +95,7 @@ namespace TransactionManager
                 leases.Add(new Lease.Lease(lease.TmId, new List<string>(lease.Keys)));
             });
             this.transactionManager.SetCurrentLeases(leases);
-            this.transactionManager.AttemptEveryTransaction();
+            this.transactionManager.AttemptFirstTransaction();
             AcknowledgeConsensusResponse response = new AcknowledgeConsensusResponse();
             return Task.FromResult(response);
         }
@@ -103,7 +103,7 @@ namespace TransactionManager
         public override Task<TransactionExecutedResponse> TransactionExecuted(TransactionExecutedRequest request, ServerCallContext context)
         {
             this.transactionManager.Logger("Acknowledged execution of transaction");
-            
+
             Transaction.Transaction transaction = new Transaction.Transaction(request.TransactionMessage);
             this.transactionManager.WriteTransactionToStore(transaction);
             TransactionExecutedResponse response = new TransactionExecutedResponse();

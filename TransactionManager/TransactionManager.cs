@@ -134,20 +134,19 @@ namespace TransactionManager
         }
 
         /// <summary>
-        /// Attempts to perform every pending transaction. If a transaction succeeds
-        /// sets its TaskCompletionSource result to the adequate TransactionResponse
+        /// Attempts to execute the first pending transaction. If it succeeds
+        /// sets the TaskCompletionSource.Result to the adequate response value
+        /// and removes the transaction from the pending list
         /// </summary>
-        public void AttemptEveryTransaction() {
-            this.Logger("Attempting every transaction");
-            foreach ((Transaction.Transaction, TaskCompletionSource<TransactionResponse>) pair in this.pendingTransactions)
+        public void AttemptFirstTransaction()
+        {
+            this.Logger("Attempting first pending transaction");
+            (Transaction.Transaction transaction, TaskCompletionSource<TransactionResponse> tcs)  = this.pendingTransactions[1];
+            (bool, List<DadInt.DadInt>) result = this.AttemptTransaction(transaction);
+            if (result.Item1)
             {
-                Transaction.Transaction transaction = pair.Item1;
-                TaskCompletionSource<TransactionResponse> tcs = pair.Item2;
-                (bool, List<DadInt.DadInt>) attemptedTransactionResult = this.AttemptTransaction(transaction);
-                if (attemptedTransactionResult.Item1)
-                {
-                    List<DadIntMessage> dadIntMessages = new List<DadIntMessage>();
-                    foreach (DadInt.DadInt dadInt in attemptedTransactionResult.Item2)
+                List<DadIntMessage> dadIntMessages = new List<DadIntMessage>();
+                    foreach (DadInt.DadInt dadInt in result.Item2)
                     {
                         dadIntMessages.Add(new DadIntMessage
                             {
@@ -158,8 +157,7 @@ namespace TransactionManager
                     TransactionResponse response = new TransactionResponse();
                     response.Read.AddRange(dadIntMessages);
                     tcs.SetResult(response);
-                    this.pendingTransactions.Remove(pair);
-                }
+                    this.pendingTransactions.RemoveAt(0);
             }
         }
 
