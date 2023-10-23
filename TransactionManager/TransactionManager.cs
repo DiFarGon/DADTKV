@@ -8,6 +8,7 @@ using Grpc.Net.Client;
 using System.Transactions;
 using System.Threading.Tasks.Dataflow;
 using System.Net.NetworkInformation;
+using System.IO.Compression;
 
 namespace TransactionManager
 {
@@ -146,10 +147,10 @@ namespace TransactionManager
                     foreach (DadInt.DadInt dadInt in attemptedTransactionResult.Item2)
                     {
                         dadIntMessages.Add(new DadIntMessage
-                        {
-                            Key = dadInt.Key,
-                            Value = dadInt.Value
-                        });
+                            {
+                                Key = dadInt.Key,
+                                Value = dadInt.Value
+                            });
                     }
                     TransactionResponse response = new TransactionResponse();
                     response.Read.AddRange(dadIntMessages);
@@ -188,26 +189,61 @@ namespace TransactionManager
         }
 
         /// <summary>
-        /// Executes the given transaction
+        /// Writes the changes to be made by this transaction to this Transaction
+        /// Manager store
+        /// </summary>
+        /// <param name="transaction"></param>
+        public void WriteTransactionToStore(Transaction.Transaction transaction)
+        {
+            foreach (DadInt.DadInt dadInt in transaction.DadIntsWrite)
+            {
+                this.store[dadInt.Key] = dadInt;
+            }
+        }
+
+        /// <summary>
+        /// Executes the given transaction and tells every other Transaction
+        /// Manager the transaction was executed
         /// </summary>
         /// <param name="transaction"></param>
         /// <returns>the list of the read DadInts</returns>
         public List<DadInt.DadInt> ExecuteTransaction(Transaction.Transaction transaction)
         {
-            // TODO: sometimes a transaction will be executed without this method being
-            // called from TransactionManagerService.Transaction context
-            // how do we return the read DadInts from Transaction context to the client
-            // who called?
-            foreach (DadInt.DadInt dadInt in transaction.DadIntsWrite)
-            {
-                this.store[dadInt.Key] = dadInt;
-            }
+            this.WriteTransactionToStore(transaction);
             List<DadInt.DadInt> readDadInts = new List<DadInt.DadInt>();
             foreach (string key in transaction.ReadKeys)
             {
                 readDadInts.Add(this.store[key]);
             }
+            this.CommunicateTransactionExecuted(transaction);
             return readDadInts;
+        }
+
+        /// <summary>
+        /// Communicates the execution of a transaction to other Transaction Managers
+        /// </summary>
+        /// <param name="transaction"></param>
+        public void CommunicateTransactionExecuted(Transaction.Transaction transaction)
+        {
+            foreach (TransactionManagerService.TransactionManagerServiceClient service in this.TmServices.Values)
+            {
+                TransactionMessage transactionMessage = new TransactionMessage();
+                foreach (DadInt.DadInt dadInt in transaction.DadIntsWrite)
+                {
+                    transactionMessage.DadIntsWrite.Add(new DadIntMessage
+                        {
+                            Key = dadInt.Key,
+                            Value = dadInt.Value
+                        });
+                }
+                foreach (string key in transaction.ReadKeys)
+                {
+                    transactionMessage.KeysRead.Add(key);
+                }
+                TransactionExecutedRequest request = new TransactionExecutedRequest();
+                request.TransactionMessage = transactionMessage;
+                service.TransactionExecuted(request);
+            }
         }
 
         /// <summary>

@@ -34,7 +34,7 @@ namespace TransactionManager
             this.transactionManager.Logger("Received Transaction Request");
             TaskCompletionSource<TransactionResponse> tcs = new TaskCompletionSource<TransactionResponse>();
 
-            Transaction.Transaction transaction = new Transaction.Transaction(transactionRequest);
+            Transaction.Transaction transaction = new Transaction.Transaction(transactionRequest.TransactionMessage);
 
             (bool success, List<DadInt.DadInt> read) = this.transactionManager.AttemptTransaction(transaction);
             if (success)
@@ -93,6 +93,14 @@ namespace TransactionManager
             this.transactionManager.SetCurrentLeases(leases);
             this.transactionManager.AttemptEveryTransaction();
             AcknowledgeConsensusResponse response = new AcknowledgeConsensusResponse();
+            return Task.FromResult(response);
+        }
+
+        public override Task<TransactionExecutedResponse> TransactionExecuted(TransactionExecutedRequest request, ServerCallContext context)
+        {
+            Transaction.Transaction transaction = new Transaction.Transaction(request.TransactionMessage);
+            this.transactionManager.WriteTransactionToStore(transaction);
+            TransactionExecutedResponse response = new TransactionExecutedResponse();
             return Task.FromResult(response);
         }
     }

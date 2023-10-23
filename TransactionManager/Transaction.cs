@@ -15,12 +15,12 @@ namespace Transaction
             this.DadIntsWrite = dadIntsWrite;
         }
 
-        public Transaction(TransactionRequest request)
+        public Transaction(TransactionMessage transactionMessage)
         {
-            this.ReadKeys = new List<string>(request.KeysRead);
+            this.ReadKeys = new List<string>(transactionMessage.KeysRead);
 
             this.DadIntsWrite = new List<DadInt.DadInt>();
-            request.DadIntsWrite.ToList().ForEach(dadInt => {
+            transactionMessage.DadIntsWrite.ToList().ForEach(dadInt => {
                 this.DadIntsWrite.Add(new DadInt.DadInt(dadInt.Key, dadInt.Value));
             });
         }
