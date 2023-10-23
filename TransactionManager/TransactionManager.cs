@@ -41,7 +41,7 @@ namespace TransactionManager
             this.url = url;
             this.debug = debug;
 
-            this.Logger("created");
+            this.Logger("Created");
         }
 
         /// <summary>

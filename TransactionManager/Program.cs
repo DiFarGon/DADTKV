@@ -1,14 +1,15 @@
 ﻿using Grpc.Core;
 using System;
+using System.Globalization;
 using System.Runtime.CompilerServices;
 
 namespace TransactionManager
 {
     class Program
     {
-        public static void Main(string[] args)
+        public static async void Main(string[] args)
         {
-            // <clusterId> <id> <url> <lms> <tms> <debug?>
+            // <clusterId> <id> <url> <lms> <tms> <timeSlotDuration> <startTime> <crashEpoch> <debug?>
 
             if (args.Length < 5 || args.Length > 6)
             {
@@ -41,7 +42,18 @@ namespace TransactionManager
             transactionManager.SetTmClusterNodes(args[4]);
             transactionManager.SetLmClusterNodes(args[3]);
 
-            while (true) ;
+            DateTime startTime = DateTime.ParseExact(args[6], "HH:mm:ss", CultureInfo.InvariantCulture);
+            DateTime currentTime = DateTime.Now;
+            if (startTime > currentTime)
+            {
+                TimeSpan delay = startTime - currentTime;
+                await Task.Delay(delay);
+            }
+            int epoch = 0;
+            Timer timer = new Timer(async state => {
+                epoch++;
+                if (epoch == int.Parse(args[7])) await server.KillAsync();
+            }, null, 0, int.Parse(args[5]));
         }
     }
 }
