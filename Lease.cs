@@ -47,6 +47,7 @@ namespace Lease
         /// <returns>true if Leases conflict, false otherwise</returns>
         public bool ConflictsWith(Lease lease)
         {
+            if (this.TmId == lease.TmId) return false;
             foreach(string key in lease.Keys)
             {
                 if (this.Keys.Contains(key)) { return true; }
@@ -66,6 +67,43 @@ namespace Lease
                 if (this.ConflictsWith(lease)) { return true; }
             }
             return false;
+        }
+
+        /// <summary>
+        /// Checks if this lease is equal to the given object
+        /// </summary>
+        /// <param name="obj"></param>
+        /// <returns>true if lease is equal, false otherwise</returns>
+        public override bool Equals(object? obj)
+        {
+            return obj is Lease lease &&
+                   TmId == lease.TmId &&
+                   EqualityComparer<List<string>>.Default.Equals(Keys, lease.Keys);
+        }
+
+        /// <summary>
+        /// Checks if two leases are equal
+        /// </summary>
+        /// <param name="left"></param>
+        /// <param name="right"></param>
+        /// <returns>true if right is equal to left, false otherwise</returns>
+        public static bool operator ==(Lease left, Lease right)
+        {
+            if (ReferenceEquals(left, right)) return true;
+            if (left is null || right is null) return true;
+            return left.TmId == right.TmId &&
+                   EqualityComparer<List<string>>.Default.Equals(left.Keys, right.Keys);
+        }
+
+        /// <summary>
+        /// Checks if two leases aren't equal
+        /// </summary>
+        /// <param name="left"></param>
+        /// <param name="right"></param>
+        /// <returns>true if leases are different, false if leases are equal</returns>
+        public static bool operator !=(Lease left, Lease right)
+        {
+            return !(left == right);
         }
     }
 }

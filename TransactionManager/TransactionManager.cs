@@ -1,14 +1,4 @@
-﻿using Grpc.Core;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using Grpc.Net.Client;
-using System.Transactions;
-using System.Threading.Tasks.Dataflow;
-using System.Net.NetworkInformation;
-using System.IO.Compression;
+﻿using Grpc.Net.Client;
 
 namespace TransactionManager
 {
@@ -109,6 +99,39 @@ namespace TransactionManager
         {
             this.Logger("Setting current leases list");
             this.currentLeases = leases;
+            this.UpdateHeldLeases();
+            this.ReleaseConflictingLeases();
+        }
+
+        /// <summary>
+        /// Updates held Leases list, by checking if any Lease in the current leases
+        /// list is owned by this Transaction Manager but isn't yet in the held
+        /// leases list
+        /// </summary>
+        private void UpdateHeldLeases()
+        {
+            foreach(Lease.Lease lease in this.currentLeases)
+            {
+                if (this.heldLeases.Contains(lease)) continue;
+                if (this.Id == lease.TmId) heldLeases.Add(lease);
+            }
+        }
+
+        /// <summary>
+        /// Detects if there are any currently held Leases conflicting with
+        /// newly attributed Leases and in the affirmative case releases it
+        /// after attempting to execute a single transaction
+        /// </summary>
+        private void ReleaseConflictingLeases()
+        {
+            foreach(Lease.Lease lease in this.heldLeases)
+            {
+                if (lease.ConflictsWithAny(this.currentLeases))
+                {
+                    this.AttemptOnlyFirstTransaction();
+                    this.heldLeases.Remove(lease);
+                }
+            }
         }
 
         /// <returns>A list with every key held through a lease</returns>
@@ -134,12 +157,20 @@ namespace TransactionManager
         }
 
         /// <summary>
-        /// Attempts to execute the first pending transaction. If it succeeds
-        /// sets the TaskCompletionSource.Result to the adequate response value
-        /// and removes the transaction from the pending list, attempting to
-        /// execute the next one.
+        /// Attempts the first transaction, if it succeeds attempts the next
         /// </summary>
         public void AttemptFirstTransaction()
+        {
+            if (this.AttemptOnlyFirstTransaction()) this.AttemptFirstTransaction();
+        }
+
+        /// <summary>
+        /// Attempts to execute the first and only the first pending transaction.
+        /// If it succeeds sets the TaskCompletionSource.Result to the adequate 
+        /// response value and removes the transaction from the pending list
+        /// </summary>
+        /// <returns>true if it suceeded, false if it failed</returns>
+        private bool AttemptOnlyFirstTransaction()
         {
             this.Logger("Attempting first pending transaction");
             (Transaction.Transaction transaction, TaskCompletionSource<TransactionResponse> tcs)  = this.pendingTransactions[1];
@@ -147,20 +178,21 @@ namespace TransactionManager
             if (result.Item1)
             {
                 List<DadIntMessage> dadIntMessages = new List<DadIntMessage>();
-                    foreach (DadInt.DadInt dadInt in result.Item2)
-                    {
-                        dadIntMessages.Add(new DadIntMessage
-                            {
-                                Key = dadInt.Key,
-                                Value = dadInt.Value
-                            });
-                    }
-                    TransactionResponse response = new TransactionResponse();
-                    response.Read.AddRange(dadIntMessages);
-                    tcs.SetResult(response);
-                    this.pendingTransactions.RemoveAt(0);
-                    this.AttemptFirstTransaction();
+                foreach (DadInt.DadInt dadInt in result.Item2)
+                {
+                    dadIntMessages.Add(new DadIntMessage
+                        {
+                            Key = dadInt.Key,
+                            Value = dadInt.Value
+                        });
+                }
+                TransactionResponse response = new TransactionResponse();
+                response.Read.AddRange(dadIntMessages);
+                tcs.SetResult(response);
+                this.pendingTransactions.RemoveAt(0);
+                return true;
             }
+            return false;
         }
 
         /// <summary>
