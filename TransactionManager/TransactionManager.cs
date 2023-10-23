@@ -75,7 +75,7 @@ namespace TransactionManager
                 TransactionManagerService.TransactionManagerServiceClient client = new TransactionManagerService.TransactionManagerServiceClient(channel);
                 this.TmServices[id] = client;
             }
-            this.Logger("set transaction managers");
+            this.Logger("Set transaction managers");
         }
 
         /// <summary>
@@ -97,7 +97,7 @@ namespace TransactionManager
                 LeaseManagerService.LeaseManagerServiceClient client = new LeaseManagerService.LeaseManagerServiceClient(channel);
                 this.LmServices[id] = client;
             }
-            this.Logger("set lease managers");
+            this.Logger("Set lease managers");
         }
 
         /// <summary>
@@ -107,6 +107,7 @@ namespace TransactionManager
         /// <param name="leases"></param>
         public void SetCurrentLeases(List<Lease.Lease> leases)
         {
+            this.Logger("Setting current leases list");
             this.currentLeases = leases;
         }
 
@@ -128,6 +129,7 @@ namespace TransactionManager
         /// <param name="transaction"></param>
         public void StageTransaction(Transaction.Transaction transaction, TaskCompletionSource<TransactionResponse> tcs)
         {
+            this.Logger("Staging transaction");
             this.pendingTransactions.Add((transaction, tcs));
         }
 
@@ -136,6 +138,7 @@ namespace TransactionManager
         /// sets its TaskCompletionSource result to the adequate TransactionResponse
         /// </summary>
         public void AttemptEveryTransaction() {
+            this.Logger("Attempting every transaction");
             foreach ((Transaction.Transaction, TaskCompletionSource<TransactionResponse>) pair in this.pendingTransactions)
             {
                 Transaction.Transaction transaction = pair.Item1;
@@ -167,6 +170,8 @@ namespace TransactionManager
         /// <param name="transaction"></param>
         public void RequestLease(Transaction.Transaction transaction)
         {
+            this.Logger("Broadcasting lease request to lease managers");
+
             LeaseRequest leaseRequest = new LeaseRequest { TmId = this.Id };
             
             List<string> keysWrite = new List<string>();
@@ -178,8 +183,6 @@ namespace TransactionManager
             List<string> keys = transaction.ReadKeys.Concat(keysWrite).ToList();
 
             foreach (string key in keys) { leaseRequest.Keys.Add(key); }
-
-            this.Logger("Broadcasting lease request to lease managers");
 
             foreach (LeaseManagerService.LeaseManagerServiceClient leaseManagerService in this.LmServices.Values)
             {
@@ -195,6 +198,8 @@ namespace TransactionManager
         /// <param name="transaction"></param>
         public void WriteTransactionToStore(Transaction.Transaction transaction)
         {
+            this.Logger("Writing transaction to store");
+
             foreach (DadInt.DadInt dadInt in transaction.DadIntsWrite)
             {
                 this.store[dadInt.Key] = dadInt;
@@ -209,6 +214,8 @@ namespace TransactionManager
         /// <returns>the list of the read DadInts</returns>
         public List<DadInt.DadInt> ExecuteTransaction(Transaction.Transaction transaction)
         {
+            this.Logger("Executing transaction");
+
             this.WriteTransactionToStore(transaction);
             List<DadInt.DadInt> readDadInts = new List<DadInt.DadInt>();
             foreach (string key in transaction.ReadKeys)
@@ -225,6 +232,8 @@ namespace TransactionManager
         /// <param name="transaction"></param>
         public void CommunicateTransactionExecuted(Transaction.Transaction transaction)
         {
+            this.Logger("Broadcasing executed transaction to every Transaction Manager");
+
             foreach (TransactionManagerService.TransactionManagerServiceClient service in this.TmServices.Values)
             {
                 TransactionMessage transactionMessage = new TransactionMessage();
@@ -256,6 +265,8 @@ namespace TransactionManager
         /// and a list with the read DadInts</returns>
         public (bool, List<DadInt.DadInt>) AttemptTransaction(Transaction.Transaction transaction)
         {
+            this.Logger("Attempting transaction");
+
             List<string> keysHeld = this.KeysHeld();
             List<string> requiredKeys = transaction.ReadKeys;
             foreach (DadInt.DadInt dadInt in transaction.DadIntsWrite)

@@ -32,6 +32,7 @@ namespace TransactionManager
         public async override Task<TransactionResponse> Transaction(TransactionRequest transactionRequest, ServerCallContext context)
         {
             this.transactionManager.Logger("Received Transaction Request");
+
             TaskCompletionSource<TransactionResponse> tcs = new TaskCompletionSource<TransactionResponse>();
 
             Transaction.Transaction transaction = new Transaction.Transaction(transactionRequest.TransactionMessage);
@@ -72,6 +73,7 @@ namespace TransactionManager
         public override Task<StatusResponse> Status(StatusRequest statusRequest, ServerCallContext context)
         {
             transactionManager.Logger("I'm Alive");
+
             var reply = new StatusResponse();
             return Task.FromResult(reply);
         }
@@ -86,6 +88,8 @@ namespace TransactionManager
         /// <returns></returns>
         public override Task<AcknowledgeConsensusResponse> AcknowledgeConsensus(AcknowledgeConsensusRequest request, ServerCallContext context)
         {
+            this.transactionManager.Logger("Acnkowledged consensus");
+
             List<Lease.Lease> leases = new List<Lease.Lease>();
             request.Leases.ToList().ForEach(lease => {
                 leases.Add(new Lease.Lease(lease.TmId, new List<string>(lease.Keys)));
@@ -98,6 +102,8 @@ namespace TransactionManager
 
         public override Task<TransactionExecutedResponse> TransactionExecuted(TransactionExecutedRequest request, ServerCallContext context)
         {
+            this.transactionManager.Logger("Acknowledged execution of transaction");
+            
             Transaction.Transaction transaction = new Transaction.Transaction(request.TransactionMessage);
             this.transactionManager.WriteTransactionToStore(transaction);
             TransactionExecutedResponse response = new TransactionExecutedResponse();
