@@ -48,6 +48,11 @@ namespace TransactionManager
             return this.ids_lmServices;
         }
 
+        public Dictionary<int, (string, TransactionManagerService.TransactionManagerServiceClient )> getTransactionManagersServices()
+        {
+            return this.ids_tmServices;
+        }
+
         public void setTmClusterNodes(string tms)
         {
             string[] keyValuePairs = tms.Split('!', StringSplitOptions.RemoveEmptyEntries);
@@ -86,6 +91,38 @@ namespace TransactionManager
                 this.ids_lmServices[n] = (id, client);
             }
             this.Logger($"set lease managers, cluster with {count} nodes");
+        }
+
+        //do i have to wait for the replies, do the LM and TM even have to send a reply?
+        public void sendStatusRequests() 
+        {
+            foreach (int clusterId in this.getLeaseManagersServices().Keys)
+            {
+                LeaseManagerService.LeaseManagerServiceClient channel = this.getLeaseManagersServices()[clusterId].Item2;
+                try
+                {
+                    channel.Status_LM(new StatusRequest_LM { });
+                }
+                catch (Exception ex)
+                {
+                    this.Logger("Caught Exception " + ex.Message);
+                    ids_lmServices.Remove(clusterId);
+                }
+            }
+
+            foreach (int clusterId in this.getTransactionManagersServices().Keys)
+            {
+                TransactionManagerService.TransactionManagerServiceClient channel = this.getTransactionManagersServices()[clusterId].Item2;
+                try
+                {
+                    channel.Status_TM(new StatusRequest_TM { });
+                }
+                catch (Exception ex)
+                {
+                    this.Logger("Caught Exception " + ex.Message);
+                    ids_tmServices.Remove(clusterId);
+                }
+            }
         }
     }
 }

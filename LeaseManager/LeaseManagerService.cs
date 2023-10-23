@@ -3,6 +3,7 @@ using Google.Protobuf.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using Grpc.Core;
+using System.Transactions;
 
 namespace LeaseManager
 {
@@ -15,7 +16,17 @@ namespace LeaseManager
             this.leaseManager = leaseManager;
         }
 
-        public override Task<LeaseResponse> Lease(LeaseRequest request, ServerCallContext context)
+        public override Task<ControlLMResponse> ControlLM(ControlLMRequest request, ServerCallContext context)
+        {
+            ControlLMResponse response = new ControlLMResponse();
+            response.LmId = leaseManager.getClusterId();
+
+            //Console.WriteLine($"[LeaseManager {leaseManager.getClusterId()}]\tControl request received from {request.LmId}");
+
+            return Task.FromResult(response);
+        }
+
+        public override Task<LeaseResponse> Lease(LeaseRequest request,  ServerCallContext context)
         {
             leaseManager.registerLease(request.TmId, request.Keys.ToList());
             LeaseResponse response = new LeaseResponse();
@@ -85,6 +96,13 @@ namespace LeaseManager
             paxosNode.setInstanceStateDecided(request.InstanceId);
 
             return Task.FromResult(response);
+        }
+
+        public override Task<StatusReply_LM> Status_LM(StatusRequest_LM request, ServerCallContext context)
+        {
+            leaseManager.Logger("I'm Alive");
+            var reply = new StatusReply_LM();
+            return Task.FromResult(reply);
         }
     }
 }
