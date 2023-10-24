@@ -5,7 +5,7 @@ namespace LeaseManager
 {
     internal class Program
     {
-        public async static void Main(string[] args)
+        public static void Main(string[] args)
         {
             // <clusterId> <id> <url> <lms> <tms> <time_slots> <start_time> <time_slot_duration> <crash_time_slot> <failure_suspicions> <debug?>
 
@@ -41,13 +41,7 @@ namespace LeaseManager
             leaseManager.setTmClusterNodes(args[4]);
 
             DateTime startTime = DateTime.ParseExact(args[6], "HH:mm:ss", CultureInfo.InvariantCulture);
-            DateTime currentTime = DateTime.Now;
-            if (startTime > currentTime)
-            {
-                TimeSpan delay = startTime - currentTime;
-                await Task.Delay(delay);
-            }
-            leaseManager.startService();
+            leaseManager.startService(startTime);
         }
     }
 }
