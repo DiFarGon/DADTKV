@@ -1,0 +1,57 @@
+syntax = "proto3";
+
+service TransactionManagerService {
+	rpc Status(StatusRequest) returns (StatusResponse);
+	rpc Transaction(TransactionRequest) returns (TransactionResponse);
+	rpc TransactionExecuted(TransactionExecutedRequest) returns (TransactionExecutedResponse);
+	rpc LeaseReleased(LeaseReleasedRequest) returns (LeaseReleasedResponse);
+	rpc InstanceResult(InstanceResultRequest) returns (InstanceResultResponse);
+}
+
+message StatusRequest { }
+
+message StatusResponse { }
+
+message TransactionRequest {
+	string clientId = 1;
+	TransactionMessage transactionMessage = 2;
+}
+
+message TransactionResponse {
+	repeated DadIntMessage read = 1;
+}
+
+message TransactionExecutedRequest {
+	TransactionMessage transactionMessage = 1;
+}
+
+message TransactionExecutedResponse { }
+
+message LeaseReleasedRequest {
+	LeaseMessageTM leaseMessage = 1;
+}
+
+message LeaseReleasedResponse { }
+
+message InstanceResultRequest {
+	int32 lm_id = 1;
+    int32 instance_id = 2;
+    repeated LeaseMessageTM result = 3;
+}
+
+message InstanceResultResponse { }
+
+message DadIntMessage {
+	string key = 1;
+	int32 value = 2;
+}
+
+message TransactionMessage {
+	repeated string keysRead = 1;
+	repeated DadIntMessage dadIntsWrite = 2;
+}
+
+message LeaseMessageTM {
+    string tmId = 1;
+    repeated string dataKeys = 2;
+}

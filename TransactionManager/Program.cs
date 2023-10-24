@@ -1,14 +1,13 @@
 ﻿using Grpc.Core;
-using System;
-using System.Runtime.CompilerServices;
+using System.Globalization;
 
 namespace TransactionManager
 {
     class Program
     {
-        public static void Main(string[] args)
+        private async static Task MainAsync(string[] args)
         {
-            // <clusterId> <id> <url> <lms> <tms> <debug?>
+            // <clusterId> <id> <url> <lms> <tms> <timeSlotDuration> <startTime> <crashEpoch> <debug?>
 
             if (args.Length < 5 || args.Length > 6)
             {
@@ -30,8 +29,7 @@ namespace TransactionManager
 
             Server server = new Server
             {
-                Services = { ClientService.BindService(new TransactionManagerServiceImpl(transactionManager)), 
-                             TransactionManagerService.BindService(new TransactionManagerServiceImpl_TM(transactionManager)) },
+                Services = { TransactionManagerService.BindService(new TransactionManagerServiceImpl(transactionManager)) },
                 Ports = { serverPort }
             };
 
@@ -39,16 +37,27 @@ namespace TransactionManager
 
             Thread.Sleep(2000); // wait for servers to start
 
-            transactionManager.setTmClusterNodes(args[4]);
-            transactionManager.setLmClusterNodes(args[3]);
+            transactionManager.SetTmClusterNodes(args[4]);
+            transactionManager.SetLmClusterNodes(args[3]);
 
-            DateTime beggining = DateTime.Now;
-
-            while (true)
+            DateTime startTime = DateTime.ParseExact(args[6], "HH:mm:ss", CultureInfo.InvariantCulture);
+            DateTime currentTime = DateTime.Now;
+            if (startTime > currentTime)
             {
-                if (DateTime.Now - beggining > TimeSpan.FromSeconds(30))
-                    break;
-            };
+                TimeSpan delay = startTime - currentTime;
+                await Task.Delay(delay);
+            }
+
+            int epoch = 0;
+            Timer timer = new Timer(async state => {
+                epoch++;
+                if (epoch == int.Parse(args[7])) await server.KillAsync();
+            }, null, 0, int.Parse(args[5]));
         }
+
+        public static void Main(string[] args)
+        {
+            MainAsync(args).GetAwaiter().GetResult();
+        } 
     }
 }
