@@ -35,10 +35,10 @@ namespace Lease
         /// Creates a Lease from a LeaseMessage
         /// </summary>
         /// <param name="message"></param>
-        public Lease(LeaseMessage message)
+        public Lease(LeaseMessageTM message)
         {
             this.TmId = message.TmId;
-            this.Keys = new List<string>(message.Keys);
+            this.Keys = new List<string>(message.DataKeys);
         }
 
         /// <summary>
@@ -129,13 +129,13 @@ namespace Lease
             return !(left == right);
         }
 
-        public LeaseMessage ToLeaseMessage()
+        public LeaseMessageTM ToLeaseMessage()
         {
-            LeaseMessage leaseMessage = new LeaseMessage();
+            LeaseMessageTM leaseMessage = new LeaseMessageTM();
             leaseMessage.TmId = this.TmId;
             foreach (string key in this.Keys)
             {
-                leaseMessage.Keys.Add(key);
+                leaseMessage.DataKeys.Add(key);
             }
             return leaseMessage;
         }

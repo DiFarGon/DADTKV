@@ -80,16 +80,16 @@ namespace TransactionManager
         /// <param name="request"></param>
         /// <param name="context"></param>
         /// <returns></returns>
-        public override Task<AcknowledgeConsensusResponse> AcknowledgeConsensus(AcknowledgeConsensusRequest request, ServerCallContext context)
+        public override Task<InstanceResultResponse> InstanceResult(InstanceResultRequest request, ServerCallContext context)
         {
             this.transactionManager.Logger("Acnkowledged consensus");
 
             List<Lease.Lease> leases = new List<Lease.Lease>();
-            request.Leases.ToList().ForEach(lease => {
-                leases.Add(new Lease.Lease(lease.TmId, new List<string>(lease.Keys)));
+            request.Result.ToList().ForEach(lease => {
+                leases.Add(new Lease.Lease(lease.TmId, new List<string>(lease.DataKeys)));
             });
             this.transactionManager.SetCurrentLeases(leases);
-            AcknowledgeConsensusResponse response = new AcknowledgeConsensusResponse();
+            InstanceResultResponse response = new InstanceResultResponse();
             return Task.FromResult(response);
         }
 

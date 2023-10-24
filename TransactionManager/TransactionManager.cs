@@ -112,6 +112,8 @@ namespace TransactionManager
         /// </summary>
         private void UpdateHeldLeases()
         {
+            this.Logger("Updating currently held leases");
+
             foreach(Lease.Lease lease in this.currentLeases)
             {
                 if (this.heldLeases.Contains(lease)) continue;
@@ -138,6 +140,8 @@ namespace TransactionManager
         /// </summary>
         private void ReleaseConflictingLeases()
         {
+            this.Logger("Releasing conflicting leases");
+
             foreach(Lease.Lease lease in this.heldLeases)
             {
                 if (lease.ConflictsWithAny(this.currentLeases).Count != 0)
@@ -156,9 +160,9 @@ namespace TransactionManager
         /// <param name="lease"></param>
         private void CommunicateLeaseReleased(Lease.Lease lease)
         {
-            this.Logger("Broadcasting Lease released request");
+            this.Logger("Informing other Transaction Managers of lease releasing");
 
-            LeaseMessage message = lease.ToLeaseMessage();
+            LeaseMessageTM message = lease.ToLeaseMessage();
             LeaseReleasedRequest request = new LeaseReleasedRequest();
             request.LeaseMessage = message;
             foreach (TransactionManagerService.TransactionManagerServiceClient service in this.TmServices.Values)
