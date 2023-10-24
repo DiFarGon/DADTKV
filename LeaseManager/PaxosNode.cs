@@ -38,6 +38,7 @@ namespace LeaseManager
         private int currentInstance = 0;
         private int lastKnownLeader = 0;
         private bool leader = false;
+        private int previousPriorityLeader;
 
         private int roundId = 0;
         private int ballotId; // combination of nodes id and round id (e.g. for node 1 and round 2, ballotId = 2 * clusterSize + 1 = 3)
@@ -55,8 +56,11 @@ namespace LeaseManager
 
             if (id == 0)
             {
+                previousPriorityLeader = paxosClusterNodes.Count - 1;
                 leader = true;
             }
+            else
+                previousPriorityLeader = id - 1;
         }
 
         public int getLastNotifiedInstance()
@@ -98,27 +102,6 @@ namespace LeaseManager
                 }
             }
 
-        }
-
-        private bool isLeaderCandidate()
-        {
-            int previousPriorityLeader;
-            if (id == 0)
-                previousPriorityLeader = paxosClusterNodes.Count - 1;
-            else
-                previousPriorityLeader = id - 1;
-
-            return lastKnownLeader == previousPriorityLeader && failureSuspicions[currentInstance].Contains(previousPriorityLeader);
-        }
-
-        public bool isLeader()
-        {
-            return leader;
-        }
-
-        public void setLeader(bool leader)
-        {
-            this.leader = leader;
         }
 
         public async void broadcastPrepare()
@@ -307,6 +290,21 @@ namespace LeaseManager
                     valueToPropose.Add(lease);
             }
             return valueToPropose;
+        }
+
+        private bool isLeaderCandidate()
+        {
+            return lastKnownLeader == previousPriorityLeader && failureSuspicions[currentInstance].Contains(previousPriorityLeader);
+        }
+
+        public bool isLeader()
+        {
+            return leader;
+        }
+
+        public void setLeader(bool leader)
+        {
+            this.leader = leader;
         }
 
         public void setLastKnownLeader(int leaderId)

@@ -16,6 +16,7 @@ namespace dadtkv
         private int slotDuration;
         private string startTime = "";
         private Func<ProcessInfo> assignTransactionManager;
+        private string configFile;
 
         public MainProcess(bool debug)
         {
@@ -113,70 +114,9 @@ namespace dadtkv
             this.Logger($"Test starts at {this.startTime}");
         }
 
-        // FIXME: sending the suspicions as a parameter to the processes might not be 
-        // a good idea since there might be a lot of timeSlots and the string would be too big
-        internal void handleF(string line)
+        internal void setConfigFile(string configFile)
         {
-            string[] states = line.Split(' ');
-
-            string timeSlot = states[1];
-
-            int tmsN = 0;
-            int lmsN = 0;
-            bool found;
-            Dictionary<ProcessInfo, string> nodesSuspicions = new Dictionary<ProcessInfo, string>();
-            for (int i = 2; i < states.Length; i++)
-            {
-                if (tmsN < this.transactionManagers.Count)
-                {
-                    if (states[i] == "C" && transactionManagers[tmsN].getCrashTimeSlot() == "none")
-                    {
-                        transactionManagers[tmsN].setCrashTimeSlot(timeSlot);
-                    }
-                    tmsN++;
-                }
-                else if (lmsN < this.leaseManagers.Count)
-                {
-                    if (states[i] == "C" && leaseManagers[lmsN].getCrashTimeSlot() == "none")
-                    {
-                        leaseManagers[lmsN].setCrashTimeSlot(timeSlot);
-                    }
-                    lmsN++;
-                }
-                else
-                {
-                    found = false;
-                    string[] sus = states[i].Trim('(', ')').Split(',');
-                    foreach (ProcessInfo transactionManager in this.transactionManagers)
-                    {
-                        if (transactionManager.getId() == sus[0])
-                        {
-                            if (nodesSuspicions.ContainsKey(transactionManager))
-                                nodesSuspicions[transactionManager] += $",{sus[1]}";
-                            else
-                                nodesSuspicions[transactionManager] = $"{timeSlot}:{sus[1]}";
-                            found = true;
-                            break;
-                        }
-                    }
-                    if (!found)
-                    {
-                        foreach (ProcessInfo leaseManager in this.leaseManagers)
-                        {
-                            if (leaseManager.getId() == sus[0])
-                            {
-                                if (nodesSuspicions.ContainsKey(leaseManager))
-                                    nodesSuspicions[leaseManager] += $",{sus[1]}";
-                                else
-                                    nodesSuspicions[leaseManager] = $"{timeSlot}:{sus[1]}";
-                                break;
-                            }
-                        }
-                    }
-                }
-            }
-            foreach (KeyValuePair<ProcessInfo, string> nodeSuspicions in nodesSuspicions)
-                nodeSuspicions.Key.addSuspicions($"{nodeSuspicions.Value}!");
+            this.configFile = "../dadtkv/" + configFile;
         }
 
         private void launchClient(ProcessInfo client)
@@ -203,12 +143,12 @@ namespace dadtkv
 
         private void launchTransactionManager(ProcessInfo transactionManager)
         {
-            // <clusterId> <id> <url> <lms> <tms> <time_slots> <start_time> <time_slot_duration> <crash_time_slot> <failure_suspicions> <debug?>
+            // <clusterId> <id> <url> <lms> <tms> <time_slots> <start_time> <time_slot_duration> <config_file> <debug?>
 
             this.Logger($"Creating new transaction manager with id '{transactionManager.getId()}' and url '{transactionManager.getUrl()}'");
 
             (int clusterId, string clusterNodes) = this.getClusterIdAndTransactionManagersString(transactionManager);
-            string arguments = $"{clusterId} {transactionManager.getId()} {transactionManager.getUrl()} {this.getAllLeaseManagersString()} {clusterNodes} {this.slots} {this.startTime} {this.slotDuration} {transactionManager.getCrashTimeSlot()} {transactionManager.getSuspicions()}";
+            string arguments = $"{clusterId} {transactionManager.getId()} {transactionManager.getUrl()} {this.getAllLeaseManagersString()} {clusterNodes} {this.slots} {this.startTime} {this.slotDuration} {this.configFile}}";
             if (this.debug) { arguments += " debug"; }
 
             if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
@@ -255,13 +195,13 @@ namespace dadtkv
 
         private void launchLeaseManager(ProcessInfo leaseManager)
         {
-            // <clusterId> <id> <url> <lms> <tms> <time_slots> <start_time> <time_slot_duration> <crash_time_slot> <failure_suspicions> <debug?>
+            // <clusterId> <id> <url> <lms> <tms> <time_slots> <start_time> <time_slot_duration> <config_file> <debug?>
 
             this.Logger($"Creating new lease manager with id '{leaseManager.getId()}' and url '{leaseManager.getUrl()}'");
 
             (int clusterId, string clusterNodes) = this.getClusterIdAndLeaseManagersString(leaseManager);
 
-            string arguments = $"{clusterId} {leaseManager.getId()} {leaseManager.getUrl()} {clusterNodes} {this.getAllTransactionManagersString()} {this.slots} {this.startTime} {this.slotDuration} {leaseManager.getCrashTimeSlot()} {leaseManager.getSuspicions()}";
+            string arguments = $"{clusterId} {leaseManager.getId()} {leaseManager.getUrl()} {clusterNodes} {this.getAllTransactionManagersString()} {this.slots} {this.startTime} {this.slotDuration} {this.configFile}";
             if (this.debug) { arguments += " debug"; }
 
             if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
@@ -326,8 +266,6 @@ namespace dadtkv
     {
         private string id;
         private string url;
-        private string crashTimeSlot = "none";
-        private string suspicions = "none"; // format: <time_slot_1>:<suspected_node_id_1>,<suspected_node_id_2>!<time_slot_2>:<suspected_node_id_1>!
 
         public ProcessInfo(string id, string url)
         {
@@ -338,21 +276,5 @@ namespace dadtkv
         public string getId() { return this.id; }
 
         public string getUrl() { return this.url; }
-
-        public string getCrashTimeSlot() { return this.crashTimeSlot; }
-
-        public void setCrashTimeSlot(string crashTimeSlot)
-        {
-            this.crashTimeSlot = crashTimeSlot;
-        }
-
-        public string getSuspicions() { return this.suspicions; }
-
-        public void addSuspicions(string suspicions) // format: <time_slot_1>:<suspected_node_id_1>,<suspected_node_id_2>!
-        {
-            if (this.suspicions == "none")
-                this.suspicions = "";
-            this.suspicions += suspicions;
-        }
     }
 }

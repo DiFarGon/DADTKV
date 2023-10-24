@@ -13,7 +13,8 @@ namespace dadtkv
             }
 
             bool debug = false;
-            if (args.Length == 2 && args[1] == "debug") {
+            if (args.Length == 2 && args[1] == "debug")
+            {
                 debug = true;
             }
 
@@ -40,11 +41,9 @@ namespace dadtkv
                     case 'T':
                         mainProcess.handleT(line);
                         break;
-                    case 'F':
-                        mainProcess.handleF(line);
-                        break;
                 }
             }
+            mainProcess.setConfigFile(args[0]);
             mainProcess.launchProcesses();
             return;
         }

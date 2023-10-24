@@ -24,7 +24,7 @@ namespace LeaseManager
         private int timeSlotDuration;
         private int crashTimeSlot = -1;
 
-        private Dictionary<int, GrpcChannel> ids_channels = new Dictionary<int, GrpcChannel>(); // key is the node's id and value is (lm id, channel)
+        private Dictionary<int, GrpcChannel> ids_channels = new Dictionary<int, GrpcChannel>();
 
         private Dictionary<int, (string, TransactionManagerService.TransactionManagerServiceClient)> ids_tmsServices =
             new Dictionary<int, (string, TransactionManagerService.TransactionManagerServiceClient)>();
@@ -49,12 +49,43 @@ namespace LeaseManager
             this.timeSlots = timeSlots;
         }
 
-        public void configureStateAndSuspicions(string crashTimeSlot, string suspicions)
+        public void configureStateAndSuspicions(string configFile)
         {
-            if (crashTimeSlot != "none")
-                this.crashTimeSlot = int.Parse(crashTimeSlot);
-            if (suspicions != "none")
-                paxosNode.setFailureSuspicions(parseFailureSuspicions(suspicions));
+            Dictionary<int, List<int>> suspicions = new Dictionary<int, List<int>>();
+            using StreamReader reader = new StreamReader(configFile);
+            {
+                string line;
+                {
+                    while ((line = reader.ReadLine()) != null)
+                    {
+                        if (line.TrimStart().StartsWith("F"))
+                        {
+                            string[] l = line.Substring(2).TrimStart().Split(' ');
+                            int timeSlot = int.Parse(l[0]);
+                            if (l[ids_tmsServices.Count + clusterId] == "C")
+                                crashTimeSlot = timeSlot;
+
+                            for (int i = 1 + ids_tmsServices.Count + ids_channels.Count; i < l.Length; i++)
+                            {
+                                string[] sus = l[i].Trim('(', ')').Split(',');
+                                if (sus[0] == id)
+                                {
+                                    if (suspicions.ContainsKey(timeSlot))
+                                        suspicions[timeSlot].Add(int.Parse(sus[1]));
+                                    else
+                                    {
+                                        suspicions[timeSlot] = new List<int>
+                                        {
+                                            int.Parse(sus[1])
+                                        };
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            paxosNode.setFailureSuspicions(suspicions);
         }
 
         public void Logger(string message)
@@ -210,6 +241,9 @@ namespace LeaseManager
 
                     if (currentTimeSlot >= timeSlots)
                         executionCompleted = true;
+
+                    if (currentTimeSlot == crashTimeSlot)
+                        Environment.Exit(0);
 
                     notifyClients();
                 }
