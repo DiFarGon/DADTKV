@@ -53,7 +53,7 @@ namespace TransactionManager
         /// <param name="tms"></param>
         public void SetTmClusterNodes(string tms)
         {
-            string[] keyValuePairs = tms.Split(';', StringSplitOptions.RemoveEmptyEntries);
+            string[] keyValuePairs = tms.Split('!', StringSplitOptions.RemoveEmptyEntries);
 
             foreach (string pair in keyValuePairs)
             {
@@ -75,10 +75,14 @@ namespace TransactionManager
         /// <param name="tms"></param>
         public void SetLmClusterNodes(string lms)
         {
-            string[] keyValuePairs = lms.Split(';', StringSplitOptions.RemoveEmptyEntries);
+            string[] keyValuePairs = lms.Split('!', StringSplitOptions.RemoveEmptyEntries);
+
+            int count = 0;
 
             foreach (string pair in keyValuePairs)
             {
+                count++;
+
                 string[] parts = pair.Split('-');
                 string id = parts[1];
                 string url = parts[2];

@@ -1,28 +1,30 @@
-﻿using Grpc.Core;
+﻿using System.Globalization;
+using Grpc.Core;
 
 namespace LeaseManager
 {
     internal class Program
     {
-        private const int controlMessagesInterval = 5; // in seconds
-        private const int failureDetectorTimeout = 2; // in seconds
-
-        public static void Main(string[] args)
+        public async static void Main(string[] args)
         {
-            // <run> <clusterId> <id> <url> <port> <lms> <tms> <time_between_paxos_instances> <start_time> <debug?>
-            // TODO: check args? 
+            // <clusterId> <id> <url> <lms> <tms> <time_slots> <start_time> <time_slot_duration> <crash_time_slot> <failure_suspicions> <debug?>
 
-            if (args.Length < 8 || args.Length > 9)
+            foreach (string arg in args)
+            {
+                Console.WriteLine(arg);
+            }
+
+            if (args.Length < 10 || args.Length > 11)
             {
                 Console.WriteLine("Wrong number of arguments");
                 return;
             }
 
             bool debug = false;
-            if (args.Length == 9 && args[8] == "debug")
+            if (args.Length == 11 && args[10] == "debug")
                 debug = true;
 
-            LeaseManager leaseManager = new LeaseManager(int.Parse(args[0]), args[1], args[2], args[7], debug);
+            LeaseManager leaseManager = new LeaseManager(int.Parse(args[0]), args[1], args[2], debug);
 
             Server server = new Server
             {
@@ -31,27 +33,21 @@ namespace LeaseManager
             };
             server.Start();
 
-            Thread.Sleep(2000); // wait for servers to start
+            Thread.Sleep(1000); // wait for servers to start
 
-            leaseManager.setPaxosClusterNodes(args[4]);
-            leaseManager.setTmClusterNodes(args[5]);
+            leaseManager.configureExecution(int.Parse(args[5]), int.Parse(args[7]));
+            leaseManager.configureStateAndSuspicions(args[8], args[9]);
+            leaseManager.setLeaseManagerNodes(args[3]);
+            leaseManager.setTmClusterNodes(args[4]);
 
-            Thread controlThread = new Thread(async () => await leaseManager.failureDetectorAsync(controlMessagesInterval, failureDetectorTimeout));
-            controlThread.Start();
-
-            DateTime lastPaxosInstance = DateTime.Now;
-            //  TODO: initiate paxos instance, call it taking into account the time between paxos instances and the timeouts suspecting the proposer
-            while (true)
+            DateTime startTime = DateTime.ParseExact(args[6], "HH:mm:ss", CultureInfo.InvariantCulture);
+            DateTime currentTime = DateTime.Now;
+            if (startTime > currentTime)
             {
-                //  TODO: should i take into account here the 2sec sleep time?
-                if (DateTime.Now - lastPaxosInstance > TimeSpan.FromSeconds(int.Parse(args[6])))
-                {
-                    leaseManager.runPaxosInstance();
-                    // FIXME: send decided value to LM
-                }
-                lastPaxosInstance = DateTime.Now;
+                TimeSpan delay = startTime - currentTime;
+                await Task.Delay(delay);
             }
-
+            leaseManager.startService();
         }
     }
 }
