@@ -21,12 +21,6 @@
 	</ItemGroup>
 
 	<ItemGroup>
-		<Compile Include="..\Lease.cs">
-			<Link>Shared\Lease.cs</Link>
-		</Compile>
-	</ItemGroup>
-
-	<ItemGroup>
 		<Compile Include="..\DadInt.cs">
 			<Link>Shared\DadInt.cs</Link>
 		</Compile>

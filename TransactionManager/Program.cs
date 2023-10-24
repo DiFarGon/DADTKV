@@ -5,7 +5,7 @@ namespace TransactionManager
 {
     class Program
     {
-        public static async void Main(string[] args)
+        private async static Task MainAsync(string[] args)
         {
             // <clusterId> <id> <url> <lms> <tms> <timeSlotDuration> <startTime> <crashEpoch> <debug?>
 
@@ -47,11 +47,17 @@ namespace TransactionManager
                 TimeSpan delay = startTime - currentTime;
                 await Task.Delay(delay);
             }
+
             int epoch = 0;
             Timer timer = new Timer(async state => {
                 epoch++;
                 if (epoch == int.Parse(args[7])) await server.KillAsync();
             }, null, 0, int.Parse(args[5]));
         }
+
+        public static void Main(string[] args)
+        {
+            MainAsync(args).GetAwaiter().GetResult();
+        } 
     }
 }

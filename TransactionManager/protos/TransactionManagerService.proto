@@ -5,6 +5,7 @@ rpc Status(StatusRequest) returns (StatusResponse);
 rpc Transaction(TransactionRequest) returns (TransactionResponse);
 rpc AcknowledgeConsensus(AcknowledgeConsensusRequest) returns (AcknowledgeConsensusResponse);
 rpc TransactionExecuted(TransactionExecutedRequest) returns (TransactionExecutedResponse);
+rpc LeaseReleased(LeaseReleasedRequest) returns (LeaseReleasedResponse);
 }
 
 message StatusRequest { }
@@ -31,6 +32,12 @@ message TransactionExecutedRequest {
 }
 
 message TransactionExecutedResponse { }
+
+message LeaseReleasedRequest {
+	LeaseMessage leaseMessage = 1;
+}
+
+message LeaseReleasedResponse { }
 
 message DadIntMessage {
 	string key = 1;

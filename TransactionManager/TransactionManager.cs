@@ -98,30 +98,37 @@ namespace TransactionManager
         public void SetCurrentLeases(List<Lease.Lease> leases)
         {
             this.Logger("Setting current leases list");
-            this.currentLeases = leases;
+            this.currentLeases.AddRange(leases);
             this.UpdateHeldLeases();
-            this.ReleaseConflictingLeases();
         }
 
         /// <summary>
         /// Updates held Leases list, by checking if any Lease in the current leases
         /// list is owned by this Transaction Manager but isn't yet in the held
-        /// leases list
+        /// leases list. In case there are conflicting Leases in the current leases
+        /// list, the one with the lower index prevails. After updating held leases
+        /// checks if the new held leases list contains leases to be released and
+        /// attempts to execute transactions
         /// </summary>
         private void UpdateHeldLeases()
         {
-            // FIXME: what if theres a conflicting lease in the current leases list
-            //        when this update happens?
-            //        if we immediately consider this lease as held concurrency problems arise
-            //        who gets the lease and who doesn't?
-            //        do lease managers even assign conflicting leases for the same epoch
-            //        in the first place?
-            //        so many questions
             foreach(Lease.Lease lease in this.currentLeases)
             {
                 if (this.heldLeases.Contains(lease)) continue;
-                if (this.Id == lease.TmId) heldLeases.Add(lease);
+                if (this.Id == lease.TmId)
+                {
+                    List<Lease.Lease> conflictingLeases = lease.ConflictsWithAny(this.currentLeases);
+                    foreach (Lease.Lease conflictingLease in conflictingLeases)
+                    {
+                        if (this.currentLeases.IndexOf(lease) < this.currentLeases.IndexOf(conflictingLease))
+                        {
+                            this.heldLeases.Add(lease);
+                        }
+                    }
+                }
             }
+            this.ReleaseConflictingLeases();
+            this.AttemptFirstTransaction();
         }
 
         /// <summary>
@@ -133,12 +140,43 @@ namespace TransactionManager
         {
             foreach(Lease.Lease lease in this.heldLeases)
             {
-                if (lease.ConflictsWithAny(this.currentLeases))
+                if (lease.ConflictsWithAny(this.currentLeases).Count != 0)
                 {
                     this.AttemptOnlyFirstTransaction();
                     this.heldLeases.Remove(lease);
+                    this.currentLeases.Remove(lease);
+                    this.CommunicateLeaseReleased(lease);
                 }
             }
+        }
+
+        /// <summary>
+        /// Communicates the releasing of a lease to every other Transaction Manager instance
+        /// </summary>
+        /// <param name="lease"></param>
+        private void CommunicateLeaseReleased(Lease.Lease lease)
+        {
+            this.Logger("Broadcasting Lease released request");
+
+            LeaseMessage message = lease.ToLeaseMessage();
+            LeaseReleasedRequest request = new LeaseReleasedRequest();
+            request.LeaseMessage = message;
+            foreach (TransactionManagerService.TransactionManagerServiceClient service in this.TmServices.Values)
+            {
+                service.LeaseReleased(request);
+            }
+        }
+
+        /// <summary>
+        /// Removes Lease from current leases list and checks if any 
+        /// </summary>
+        /// <param name="lease"></param>
+        public void RemoveLease(Lease.Lease lease)
+        {
+            this.Logger("Removing lease");
+
+            this.currentLeases.Remove(lease);
+            this.UpdateHeldLeases();
         }
 
         /// <returns>A list with every key held through a lease</returns>
@@ -273,23 +311,12 @@ namespace TransactionManager
         {
             this.Logger("Broadcasing executed transaction to every Transaction Manager");
 
+            TransactionExecutedRequest request = new TransactionExecutedRequest();
+            TransactionMessage transactionMessage = transaction.ToTransactionMessage();
+            request.TransactionMessage = transactionMessage;
+
             foreach (TransactionManagerService.TransactionManagerServiceClient service in this.TmServices.Values)
             {
-                TransactionMessage transactionMessage = new TransactionMessage();
-                foreach (DadInt.DadInt dadInt in transaction.DadIntsWrite)
-                {
-                    transactionMessage.DadIntsWrite.Add(new DadIntMessage
-                        {
-                            Key = dadInt.Key,
-                            Value = dadInt.Value
-                        });
-                }
-                foreach (string key in transaction.ReadKeys)
-                {
-                    transactionMessage.KeysRead.Add(key);
-                }
-                TransactionExecutedRequest request = new TransactionExecutedRequest();
-                request.TransactionMessage = transactionMessage;
                 service.TransactionExecuted(request);
             }
         }

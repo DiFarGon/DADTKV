@@ -32,6 +32,16 @@ namespace Lease
         }
 
         /// <summary>
+        /// Creates a Lease from a LeaseMessage
+        /// </summary>
+        /// <param name="message"></param>
+        public Lease(LeaseMessage message)
+        {
+            this.TmId = message.TmId;
+            this.Keys = new List<string>(message.Keys);
+        }
+
+        /// <summary>
         /// Adds the given key to this Lease's keys list
         /// </summary>
         /// <param name="key"></param>
@@ -59,14 +69,18 @@ namespace Lease
         /// Checks if this Lease conflicts with any lease of the given lease
         /// </summary>
         /// <param name="leases"></param>
-        /// <returns>true if there's a conflicting lease, false otherwise</returns>
-        public bool ConflictsWithAny(List<Lease> leases)
+        /// <returns>list of conflicting leases</returns>
+        public List<Lease> ConflictsWithAny(List<Lease> leases)
         {
+            List<Lease> conflictingLeases = new List<Lease>();
             foreach (Lease lease in leases)
             {
-                if (this.ConflictsWith(lease)) { return true; }
+                if (this.ConflictsWith(lease))
+                {
+                    conflictingLeases.Add(lease);
+                }
             }
-            return false;
+            return conflictingLeases;
         }
 
         /// <summary>
@@ -113,6 +127,17 @@ namespace Lease
         public static bool operator !=(Lease left, Lease right)
         {
             return !(left == right);
+        }
+
+        public LeaseMessage ToLeaseMessage()
+        {
+            LeaseMessage leaseMessage = new LeaseMessage();
+            leaseMessage.TmId = this.TmId;
+            foreach (string key in this.Keys)
+            {
+                leaseMessage.Keys.Add(key);
+            }
+            return leaseMessage;
         }
     }
 }

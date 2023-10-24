@@ -89,11 +89,17 @@ namespace TransactionManager
                 leases.Add(new Lease.Lease(lease.TmId, new List<string>(lease.Keys)));
             });
             this.transactionManager.SetCurrentLeases(leases);
-            this.transactionManager.AttemptFirstTransaction();
             AcknowledgeConsensusResponse response = new AcknowledgeConsensusResponse();
             return Task.FromResult(response);
         }
 
+        /// <summary>
+        /// Handles a TransactionExecutedRequest by writing the changes
+        /// made to the DadInts store
+        /// </summary>
+        /// <param name="request"></param>
+        /// <param name="context"></param>
+        /// <returns></returns>
         public override Task<TransactionExecutedResponse> TransactionExecuted(TransactionExecutedRequest request, ServerCallContext context)
         {
             this.transactionManager.Logger("Acknowledged execution of transaction");
@@ -101,6 +107,17 @@ namespace TransactionManager
             Transaction.Transaction transaction = new Transaction.Transaction(request.TransactionMessage);
             this.transactionManager.WriteTransactionToStore(transaction);
             TransactionExecutedResponse response = new TransactionExecutedResponse();
+            return Task.FromResult(response);
+        }
+
+        public override Task<LeaseReleasedResponse> LeaseReleased(LeaseReleasedRequest request, ServerCallContext context)
+        {
+            this.transactionManager.Logger("Acknowledged releasing of lease");
+
+            Lease.Lease lease = new Lease.Lease(request.LeaseMessage);
+            this.transactionManager.RemoveLease(lease);
+
+            LeaseReleasedResponse response = new LeaseReleasedResponse();
             return Task.FromResult(response);
         }
     }
