@@ -37,25 +37,24 @@ namespace TransactionManager
 
             Thread.Sleep(1000); // wait for servers to start
 
-            transactionManager.configureExecution(int.Parse(args[5]), int.Parse(args[7]));
-            transactionManager.configureStateAndSuspicions(args[8]);
             transactionManager.SetTmClusterNodes(args[4]);
             transactionManager.SetLmClusterNodes(args[3]);
+            transactionManager.configureStateAndSuspicions(args[8]);
 
-            DateTime startTime = DateTime.ParseExact(args[6], "HH:mm:ss", CultureInfo.InvariantCulture);
-            DateTime currentTime = DateTime.Now;
-            if (startTime > currentTime)
-            {
-                TimeSpan delay = startTime - currentTime;
-                await Task.Delay(delay);
-            }
+            // DateTime startTime = DateTime.ParseExact(args[6], "HH:mm:ss", CultureInfo.InvariantCulture);
+            // DateTime currentTime = DateTime.Now;
+            // if (startTime > currentTime)
+            // {
+            //     TimeSpan delay = startTime - currentTime;
+            //     await Task.Delay(delay);
+            // }
 
-            int epoch = 0;
-            Timer timer = new Timer(async state =>
-            {
-                epoch++;
-                if (epoch == int.Parse(args[7])) await server.KillAsync();
-            }, null, 0, int.Parse(args[5]));
+            // int epoch = 0;
+            // Timer timer = new Timer(async state =>
+            // {
+            //     epoch++;
+            //     if (epoch == int.Parse(args[7])) await server.KillAsync();
+            // }, null, 0, int.Parse(args[5]));
         }
 
         public static void Main(string[] args)

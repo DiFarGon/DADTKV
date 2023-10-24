@@ -16,7 +16,7 @@ namespace dadtkv
         private int slotDuration;
         private string startTime = "";
         private Func<ProcessInfo> assignTransactionManager;
-        private string configFile;
+        private string configFile = "";
 
         public MainProcess(bool debug)
         {
@@ -121,11 +121,11 @@ namespace dadtkv
 
         private void launchClient(ProcessInfo client)
         {
-            // <id> <url> <port>? <id> <tms> <startTime> <debug?>
+            // <id> <tms> <tm_id> <startTime> <debug?>
 
             this.Logger($"Creating new client with id '{client.getId()}' and url '{client.getUrl()}'");
 
-            string arguments = $"{client.getId()} {client.getUrl()} {this.assignTransactionManager().getId()} {this.getAllTransactionManagersString()} {this.startTime}";
+            string arguments = $"{client.getId()} {this.getAllTransactionManagersString()} {this.assignTransactionManager().getId()} {this.startTime}";
             if (this.debug) { arguments += " debug"; }
 
             if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
@@ -247,10 +247,6 @@ namespace dadtkv
 
         public void launchProcesses()
         {
-            foreach (ProcessInfo client in this.clients)
-            {
-                this.launchClient(client);
-            }
             foreach (ProcessInfo transactionManager in this.transactionManagers)
             {
                 this.launchTransactionManager(transactionManager);
@@ -258,6 +254,10 @@ namespace dadtkv
             foreach (ProcessInfo leaseManager in this.leaseManagers)
             {
                 this.launchLeaseManager(leaseManager);
+            }
+            foreach (ProcessInfo client in this.clients)
+            {
+                this.launchClient(client);
             }
         }
     }

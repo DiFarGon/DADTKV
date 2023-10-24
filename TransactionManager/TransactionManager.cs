@@ -8,6 +8,8 @@ namespace TransactionManager
         public readonly string Id;
         private string url;
         private bool debug;
+
+        private Dictionary<string, int> tmsIds_tmsClusterIds = new Dictionary<string, int>();
         public readonly Dictionary<string, TransactionManagerService.TransactionManagerServiceClient> TmServices =
             new Dictionary<string, TransactionManagerService.TransactionManagerServiceClient>();
         public readonly Dictionary<string, LeaseManagerService.LeaseManagerServiceClient> LmServices =
@@ -17,12 +19,9 @@ namespace TransactionManager
         private List<(Transaction.Transaction, TaskCompletionSource<TransactionResponse> tcs)> pendingTransactions = new List<(Transaction.Transaction, TaskCompletionSource<TransactionResponse> tcs)>();
         private Dictionary<string, DadInt.DadInt> store = new Dictionary<string, DadInt.DadInt>();
 
-        private int timeSlots;
-        private int timeSlotDuration;
-        private int crashTimeSlot = -1;
         private Dictionary<int, List<int>> failureSuspicions = new Dictionary<int, List<int>>();
 
-
+        private int crashTimeSlot = -1;
 
 
         /// <summary>
@@ -54,13 +53,6 @@ namespace TransactionManager
             }
         }
 
-
-        public void configureExecution(int timeSlots, int timeSlotDuration)
-        {
-            this.timeSlotDuration = timeSlotDuration;
-            this.timeSlots = timeSlots;
-        }
-
         public void configureStateAndSuspicions(string configFile)
         {
             Dictionary<int, List<int>> suspicions = new Dictionary<int, List<int>>();
@@ -83,12 +75,12 @@ namespace TransactionManager
                             if (sus[0] == Id)
                             {
                                 if (suspicions.ContainsKey(timeSlot))
-                                    suspicions[timeSlot].Add(int.Parse(sus[1]));
+                                    suspicions[timeSlot].Add(tmsIds_tmsClusterIds[sus[1]]);
                                 else
                                 {
                                     suspicions[timeSlot] = new List<int>
                                         {
-                                            int.Parse(sus[1])
+                                            tmsIds_tmsClusterIds[sus[1]]
                                         };
                                 }
                             }
@@ -111,12 +103,14 @@ namespace TransactionManager
             foreach (string pair in keyValuePairs)
             {
                 string[] parts = pair.Split('-');
+                int n = int.Parse(parts[0]);
                 string id = parts[1];
                 string url = parts[2];
 
                 GrpcChannel channel = GrpcChannel.ForAddress(url);
                 TransactionManagerService.TransactionManagerServiceClient client = new TransactionManagerService.TransactionManagerServiceClient(channel);
                 this.TmServices[id] = client;
+                this.tmsIds_tmsClusterIds[id] = n;
             }
             this.Logger("Set transaction managers");
         }

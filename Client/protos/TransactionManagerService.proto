@@ -1,0 +1,31 @@
+syntax = "proto3";
+
+service TransactionManagerService {
+	rpc Status(StatusRequest) returns (StatusResponse);
+	rpc Transaction(TransactionRequest) returns (TransactionResponse);
+}
+
+message StatusRequest { }
+
+message StatusResponse { }
+
+message TransactionRequest {
+	string clientId = 1;
+	TransactionMessage transactionMessage = 2;
+}
+
+message TransactionResponse {
+	repeated DadIntMessage read = 1;
+}
+
+message InstanceResultResponse { }
+
+message TransactionMessage {
+	repeated string keysRead = 1;
+	repeated DadIntMessage dadIntsWrite = 2;
+}
+
+message DadIntMessage {
+	string key = 1;
+	int32 value = 2;
+}

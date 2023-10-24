@@ -4,49 +4,51 @@ namespace Client
 {
     internal class Program
     {
-        // <id> <url> <tm_id> <tms> <startTime> <debug?>
-
         public static void Main(string[] args)
         {
-            if (args.Length < 5 || args.Length > 6)
+            // <id> <tms> <tm_id> <startTime> <debug?>
+
+            if (args.Length < 4 || args.Length > 5)
             {
                 Console.Error.WriteLine("[Client] Wrong number of arguments!");
                 return;
             }
 
-            string[] script = File.ReadAllLines(args[1]);
-
             bool debug = false;
-            if (args.Length == 6 && args[5] == "debug")
+            if (args.Length == 5 && args[4] == "debug")
             {
                 debug = true;
             }
 
-            Thread.Sleep(7000);
+            Client client = new Client(args[0], args[2], debug);
 
-            Client client = new Client(args[0], args[2], debug, args[3]);
+            Thread.Sleep(1000);
 
-            ///Reads script in a loop
-            while (true)
-            {
-                foreach (string line in script)
-                {
-                    switch (line[0])
-                    {
-                        case '#':
-                            continue;
-                        case 'T':
-                            client.handleT(line);
-                            break;
-                        case 'W':
-                            client.handleW(line);
-                            break;
-                        case 'S':
-                            client.handleS();
-                            break;
-                    }
-                }
-            }
+            client.setTmClusterNodes(args[1]);
+
+            // string[] script = File.ReadAllLines(args[1]);
+
+            // ///Reads script in a loop
+            // while (true)
+            // {
+            //     foreach (string line in script)
+            //     {
+            //         switch (line[0])
+            //         {
+            //             case '#':
+            //                 continue;
+            //             case 'T':
+            //                 client.handleT(line);
+            //                 break;
+            //             case 'W':
+            //                 client.handleW(line);
+            //                 break;
+            //             case 'S':
+            //                 client.handleS();
+            //                 break;
+            //         }
+            //     }
+            // }
 
             client.closeChannel();
         }
