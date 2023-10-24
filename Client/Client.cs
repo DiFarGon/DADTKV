@@ -13,33 +13,26 @@ namespace Client
     public class Client
     {
         private string id;
-        private string tmId;
-        private string tms;
+        private string assignedTmId;
         private bool debug;
         private GrpcChannel channel;
-        private ClientService.ClientServiceClient client;
-        private Dictionary<string, string> ids_tmServices =
-            new Dictionary<string, string>();
+        private Dictionary<string, string> ids_tmServices = new Dictionary<string, string>(); // <tm_cluster_id, url>
+        private TransactionManagerService.TransactionManagerServiceClient tmClient;
 
         /// <summary>
         /// Creates a new Client with given parameters
         /// </summary>
         /// <param name="id"></param>
-        /// <param name="tmId"></param>
+        /// <param name="assignedTmId"></param>
         /// <param name="debug"></param>
         /// <param name="tms"></param>
-        public Client(string id, string tmId, bool debug, string tms)
+        public Client(string id, string assignedTmId, bool debug)
         {
             this.id = id;
-            this.tmId = tmId;
+            this.assignedTmId = assignedTmId;
             this.debug = debug;
-            this.tms = tms;
 
             this.Logger("created");
-            this.setTmClusterNodes(this.tms);
-            Thread.Sleep(1000);
-            this.channel = GrpcChannel.ForAddress(this.ids_tmServices[this.tmId]);
-            this.client = new ClientService.ClientServiceClient(channel);
         }
 
         /// <summary>
@@ -56,7 +49,7 @@ namespace Client
 
         public void setTmClusterNodes(string tms)
         {
-            string[] keyValuePairs = tms.Split(';', StringSplitOptions.RemoveEmptyEntries);
+            string[] keyValuePairs = tms.Split('!', StringSplitOptions.RemoveEmptyEntries);
 
             foreach (string pair in keyValuePairs)
             {
@@ -66,6 +59,12 @@ namespace Client
                 string url = parts[2];
 
                 this.ids_tmServices[id] = url;
+
+                if (id == this.assignedTmId)
+                {
+                    this.channel = GrpcChannel.ForAddress(url);
+                    this.tmClient = new TransactionManagerService.TransactionManagerServiceClient(channel);
+                }
             }
             this.Logger("set transaction managers");
         }
@@ -91,7 +90,7 @@ namespace Client
         /// <param name="line"></param>
         public void handleT(string line)
         {
-            this.Logger("Sending Transaction Request to " + tmId);
+            this.Logger("Sending Transaction Request to " + assignedTmId);
             TransactionRequest transactionRequest = new TransactionRequest { ClientId = this.id };
 
             string pattern = @"\(([^)]*)\)(?:\s*,\s*\(([^)]*)\))?";
@@ -103,13 +102,14 @@ namespace Client
             string stringRead = matchesInput.Count > 0 ? matchesInput[0].Groups[1].Value : "";
             string stringWrite = matchesInput.Count > 1 ? matchesInput[1].Groups[1].Value : "";
 
+            TransactionMessage transactionMessage = new TransactionMessage { };
             //Read keys for transaction
             if (!stringRead.Equals(""))
             {
                 string[] readKeys = stringRead.Split(',');
                 for (int i = 0; i < readKeys.Length; i++)
                 {
-                    transactionRequest.KeysRead.Add(readKeys[i].Replace("\"", ""));
+                    transactionMessage.KeysRead.Add(readKeys[i].Replace("\"", ""));
                 }
             }
 
@@ -121,21 +121,21 @@ namespace Client
                 {
                     string currentString = Writeparts[i].TrimStart('<').TrimEnd('>').Trim();
                     string[] aux = currentString.Split(",");
-                    DadInt dadInt = new DadInt { Key = aux[0].Replace("\"", ""), Value = int.Parse(aux[1]) };
-                    transactionRequest.KeysWrite.Add(dadInt);
+                    DadIntMessage dadInt = new DadIntMessage { Key = aux[0].Replace("\"", ""), Value = int.Parse(aux[1]) };
+                    transactionMessage.DadIntsWrite.Add(dadInt);
                 }
             }
 
             //if after 15 seconds didn't receive reply from server, it tries with another one
             var callOptions = new CallOptions(deadline: DateTime.UtcNow.AddSeconds(15));
             //wait for the response
-            try 
+            try
             {
-                var response = client.Transaction(transactionRequest, callOptions);
+                TransactionResponse response = tmClient.Transaction(transactionRequest, callOptions);
                 this.Logger("Received response");
-                foreach (DadInt dadInt_aux in response.Read)
+                foreach (DadIntMessage di in response.Read)
                 {
-                    Console.WriteLine("DadInt" + dadInt_aux.Key + "with value:" + dadInt_aux.Value);
+                    Console.WriteLine("DadInt" + di.Key + "with value:" + di.Value);
                 }
             }
             catch (Exception e)
@@ -154,29 +154,29 @@ namespace Client
             this.Logger("Sending Status Request");
             try
             {
-                client.Status(new StatusRequest { });
+                tmClient.Status(new StatusRequest { });
             }
             catch (Exception e)
             {
-                this.Logger("Caught exception "+ e.Message);
+                this.Logger("Caught exception " + e.Message);
                 this.handleException();
                 this.handleS();
             }
         }
 
-        public void handleException() 
+        public void handleException()
         {
             this.Logger("Handle Exception!");
             Random random = new Random();
-            this.ids_tmServices.Remove(this.tmId);
+            this.ids_tmServices.Remove(assignedTmId);
 
             // Get a random index based on the remaining keys
             int randomIndex = random.Next(this.ids_tmServices.Count);
 
             // Access the key at the random index
-            this.tmId = this.ids_tmServices.Keys.ElementAt(randomIndex);
-            this.channel = GrpcChannel.ForAddress(this.ids_tmServices[this.tmId]);
-            this.client = new ClientService.ClientServiceClient(channel);
+            this.assignedTmId = this.ids_tmServices.Keys.ElementAt(randomIndex);
+            this.channel = GrpcChannel.ForAddress(this.ids_tmServices[this.assignedTmId]);
+            this.tmClient = new TransactionManagerService.TransactionManagerServiceClient(channel);
         }
 
         public async void closeChannel()

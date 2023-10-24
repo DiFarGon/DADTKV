@@ -37,18 +37,19 @@ namespace LeaseManager
             Thread.Sleep(1000); // wait for servers to start
 
             leaseManager.configureExecution(int.Parse(args[5]), int.Parse(args[7]));
-            leaseManager.configureStateAndSuspicions(args[8]);
             leaseManager.setLeaseManagerNodes(args[3]);
             leaseManager.setTmClusterNodes(args[4]);
+            leaseManager.configureStateAndSuspicions(args[8]);
 
-            DateTime startTime = DateTime.ParseExact(args[6], "HH:mm:ss", CultureInfo.InvariantCulture);
-            DateTime currentTime = DateTime.Now;
-            if (startTime > currentTime)
-            {
-                TimeSpan delay = startTime - currentTime;
-                await Task.Delay(delay);
-            }
-            leaseManager.startService();
+
+            // DateTime startTime = DateTime.ParseExact(args[6], "HH:mm:ss", CultureInfo.InvariantCulture);
+            // DateTime currentTime = DateTime.Now;
+            // if (startTime > currentTime)
+            // {
+            //     TimeSpan delay = startTime - currentTime;
+            //     await Task.Delay(delay);
+            // }
+            // leaseManager.startService();
         }
 
         public static void Main(string[] args)

@@ -24,6 +24,8 @@ namespace LeaseManager
         private int timeSlotDuration;
         private int crashTimeSlot = -1;
 
+        private Dictionary<string, int> lmsIds_lmsClusterIds = new Dictionary<string, int>();
+
         private Dictionary<int, GrpcChannel> ids_channels = new Dictionary<int, GrpcChannel>();
 
         private Dictionary<int, (string, TransactionManagerService.TransactionManagerServiceClient)> ids_tmsServices =
@@ -72,12 +74,15 @@ namespace LeaseManager
                             if (sus[0] == id)
                             {
                                 if (suspicions.ContainsKey(timeSlot))
-                                    suspicions[timeSlot].Add(int.Parse(sus[1]));
+                                {
+                                    suspicions[timeSlot].Add(lmsIds_lmsClusterIds[sus[1]]);
+                                }
                                 else
                                 {
+                                    Console.WriteLine($"sus[1]: {sus[1]}");
                                     suspicions[timeSlot] = new List<int>
                                         {
-                                            int.Parse(sus[1])
+                                            lmsIds_lmsClusterIds[sus[1]]
                                         };
                                 }
                             }
@@ -86,6 +91,11 @@ namespace LeaseManager
                 }
             }
             paxosNode.setFailureSuspicions(suspicions);
+
+            foreach (KeyValuePair<int, List<int>> entry in suspicions)
+            {
+                this.Logger($"suspicions at time slot {entry.Key}: {string.Join(", ", entry.Value)}");
+            }
         }
 
         public void Logger(string message)
@@ -111,6 +121,7 @@ namespace LeaseManager
 
                 channel = GrpcChannel.ForAddress(url); // sets up channels to lm nodes
                 ids_channels[n] = channel;
+                lmsIds_lmsClusterIds[id] = n;
             }
             setPaxosCluster(); // sets up paxos cluster nodes
             this.Logger($"set lease managers");
@@ -203,7 +214,7 @@ namespace LeaseManager
             }
         }
 
-        public async void startService()
+        public void startService()
         {
             int currentTimeSlot = 0;
             bool executionCompleted = false;
