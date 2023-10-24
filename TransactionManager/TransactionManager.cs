@@ -17,6 +17,14 @@ namespace TransactionManager
         private List<(Transaction.Transaction, TaskCompletionSource<TransactionResponse> tcs)> pendingTransactions = new List<(Transaction.Transaction, TaskCompletionSource<TransactionResponse> tcs)>();
         private Dictionary<string, DadInt.DadInt> store = new Dictionary<string, DadInt.DadInt>();
 
+        private int timeSlots;
+        private int timeSlotDuration;
+        private int crashTimeSlot = -1;
+        private Dictionary<int, List<int>> failureSuspicions = new Dictionary<int, List<int>>();
+
+
+
+
         /// <summary>
         /// Creates a new Transaction Manager with given parameters
         /// </summary>
@@ -44,6 +52,51 @@ namespace TransactionManager
             {
                 Console.WriteLine($"[TransactionManager {this.Id}]\t" + message + '\n');
             }
+        }
+
+
+        public void configureExecution(int timeSlots, int timeSlotDuration)
+        {
+            this.timeSlotDuration = timeSlotDuration;
+            this.timeSlots = timeSlots;
+        }
+
+        public void configureStateAndSuspicions(string configFile)
+        {
+            Dictionary<int, List<int>> suspicions = new Dictionary<int, List<int>>();
+            using StreamReader reader = new StreamReader(configFile);
+            {
+                string line;
+                while ((line = reader.ReadLine()) != null)
+                {
+                    if (line.StartsWith("F"))
+                    {
+                        string[] parts = line.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+                        int timeSlot = int.Parse(parts[1]);
+                        int tmsStatesStartIndex = 2;
+                        if (parts[tmsStatesStartIndex + clusterId] == "C")
+                            this.crashTimeSlot = timeSlot;
+
+                        for (int i = tmsStatesStartIndex + TmServices.Count + LmServices.Count; i < parts.Length; i++)
+                        {
+                            string[] sus = parts[i].Trim('(', ')').Split(',');
+                            if (sus[0] == Id)
+                            {
+                                if (suspicions.ContainsKey(timeSlot))
+                                    suspicions[timeSlot].Add(int.Parse(sus[1]));
+                                else
+                                {
+                                    suspicions[timeSlot] = new List<int>
+                                        {
+                                            int.Parse(sus[1])
+                                        };
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            this.failureSuspicions = suspicions;
         }
 
         /// <summary>
@@ -118,7 +171,7 @@ namespace TransactionManager
         {
             this.Logger("Updating currently held leases");
 
-            foreach(Lease.Lease lease in this.currentLeases)
+            foreach (Lease.Lease lease in this.currentLeases)
             {
                 if (this.heldLeases.Contains(lease)) continue;
                 if (this.Id == lease.TmId)
@@ -146,7 +199,7 @@ namespace TransactionManager
         {
             this.Logger("Releasing conflicting leases");
 
-            foreach(Lease.Lease lease in this.heldLeases)
+            foreach (Lease.Lease lease in this.heldLeases)
             {
                 if (lease.ConflictsWithAny(this.currentLeases).Count != 0)
                 {
@@ -226,7 +279,7 @@ namespace TransactionManager
         private bool AttemptOnlyFirstTransaction()
         {
             this.Logger("Attempting first pending transaction");
-            (Transaction.Transaction transaction, TaskCompletionSource<TransactionResponse> tcs)  = this.pendingTransactions[1];
+            (Transaction.Transaction transaction, TaskCompletionSource<TransactionResponse> tcs) = this.pendingTransactions[1];
             (bool, List<DadInt.DadInt>) result = this.AttemptTransaction(transaction);
             if (result.Item1)
             {
@@ -234,10 +287,10 @@ namespace TransactionManager
                 foreach (DadInt.DadInt dadInt in result.Item2)
                 {
                     dadIntMessages.Add(new DadIntMessage
-                        {
-                            Key = dadInt.Key,
-                            Value = dadInt.Value
-                        });
+                    {
+                        Key = dadInt.Key,
+                        Value = dadInt.Value
+                    });
                 }
                 TransactionResponse response = new TransactionResponse();
                 response.Read.AddRange(dadIntMessages);
@@ -258,7 +311,7 @@ namespace TransactionManager
             this.Logger("Broadcasting lease request to lease managers");
 
             LeaseRequest leaseRequest = new LeaseRequest { TmId = this.Id };
-            
+
             List<string> keysWrite = new List<string>();
             foreach (DadInt.DadInt dadInt in transaction.DadIntsWrite)
             {

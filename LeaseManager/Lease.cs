@@ -37,5 +37,10 @@ namespace LeaseManager
                    TmId == lease.TmId &&
                    EqualityComparer<List<string>>.Default.Equals(Keys, lease.Keys);
         }
+
+        public override int GetHashCode()
+        {
+            throw new NotImplementedException();
+        }
     }
 }

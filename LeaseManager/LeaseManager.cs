@@ -55,30 +55,30 @@ namespace LeaseManager
             using StreamReader reader = new StreamReader(configFile);
             {
                 string line;
+                while ((line = reader.ReadLine()) != null)
                 {
-                    while ((line = reader.ReadLine()) != null)
+                    if (line.StartsWith("F"))
                     {
-                        if (line.TrimStart().StartsWith("F"))
-                        {
-                            string[] l = line.Substring(2).TrimStart().Split(' ');
-                            int timeSlot = int.Parse(l[0]);
-                            if (l[ids_tmsServices.Count + clusterId] == "C")
-                                crashTimeSlot = timeSlot;
+                        string[] parts = line.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+                        int timeSlot = int.Parse(parts[1]);
+                        int lmsStatesStartIndex = 2 + ids_tmsServices.Count;
 
-                            for (int i = 1 + ids_tmsServices.Count + ids_channels.Count; i < l.Length; i++)
+                        if (parts[lmsStatesStartIndex + clusterId] == "C")
+                            crashTimeSlot = timeSlot;
+
+                        for (int i = lmsStatesStartIndex + ids_channels.Count; i < parts.Length; i++)
+                        {
+                            string[] sus = parts[i].Trim('(', ')').Split(',');
+                            if (sus[0] == id)
                             {
-                                string[] sus = l[i].Trim('(', ')').Split(',');
-                                if (sus[0] == id)
+                                if (suspicions.ContainsKey(timeSlot))
+                                    suspicions[timeSlot].Add(int.Parse(sus[1]));
+                                else
                                 {
-                                    if (suspicions.ContainsKey(timeSlot))
-                                        suspicions[timeSlot].Add(int.Parse(sus[1]));
-                                    else
-                                    {
-                                        suspicions[timeSlot] = new List<int>
+                                    suspicions[timeSlot] = new List<int>
                                         {
                                             int.Parse(sus[1])
                                         };
-                                    }
                                 }
                             }
                         }
@@ -145,23 +145,6 @@ namespace LeaseManager
         internal PaxosNode getPaxosNode()
         {
             return paxosNode;
-        }
-
-        public static Dictionary<int, List<int>> parseFailureSuspicions(string failureSuspicions)
-        {
-            Dictionary<int, List<int>> suspicions = new Dictionary<int, List<int>>();
-
-            string[] susps = failureSuspicions.Split('!', StringSplitOptions.RemoveEmptyEntries);
-
-            foreach (string susp in susps)
-            {
-                string[] parts = susp.Split(':');
-                if (!suspicions.ContainsKey(int.Parse(parts[0])))
-                    suspicions[int.Parse(parts[0])] = new List<int>();
-                foreach (string s in parts[1].Split(','))
-                    suspicions[int.Parse(parts[0])].Add(int.Parse(s));
-            }
-            return suspicions;
         }
 
         public void registerLease(string tmId, List<string> dataKeys)

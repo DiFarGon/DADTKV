@@ -34,7 +34,7 @@ namespace LeaseManager
     {
         private int id;
         private Dictionary<int, LeaseManagerService.LeaseManagerServiceClient> paxosClusterNodes = new Dictionary<int, LeaseManagerService.LeaseManagerServiceClient>();
-        private Dictionary<int, List<int>> failureSuspicions; // each index is a timeSlot and each entry is a list of suspected nodes
+        private Dictionary<int, List<int>> failureSuspicions = new Dictionary<int, List<int>>(); // each index is a timeSlot and each entry is a list of suspected nodes
         private int currentInstance = 0;
         private int lastKnownLeader = 0;
         private bool leader = false;

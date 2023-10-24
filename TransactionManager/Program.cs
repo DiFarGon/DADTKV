@@ -7,16 +7,16 @@ namespace TransactionManager
     {
         private async static Task MainAsync(string[] args)
         {
-            // <clusterId> <id> <url> <lms> <tms> <timeSlotDuration> <startTime> <crashEpoch> <debug?>
+            // <clusterId> <id> <url> <lms> <tms> <time_slots> <start_time> <time_slot_duration> <config_file> <debug?>
 
-            if (args.Length < 5 || args.Length > 6)
+            if (args.Length < 9 || args.Length > 10)
             {
                 Console.Error.WriteLine("[TransactionManager] Wrong number of arguments!");
                 return;
             }
 
             bool debug = false;
-            if (args.Length == 6 && args[5] == "debug")
+            if (args.Length == 10 && args[9] == "debug")
                 debug = true;
 
             TransactionManager transactionManager = new TransactionManager(int.Parse(args[0]), args[1], args[2], debug);
@@ -35,8 +35,9 @@ namespace TransactionManager
 
             server.Start();
 
-            Thread.Sleep(2000); // wait for servers to start
+            Thread.Sleep(1000); // wait for servers to start
 
+            transactionManager.configureExecution(int.Parse(args[5]), int.Parse(args[7]));
             transactionManager.SetTmClusterNodes(args[4]);
             transactionManager.SetLmClusterNodes(args[3]);
 
@@ -49,7 +50,8 @@ namespace TransactionManager
             }
 
             int epoch = 0;
-            Timer timer = new Timer(async state => {
+            Timer timer = new Timer(async state =>
+            {
                 epoch++;
                 if (epoch == int.Parse(args[7])) await server.KillAsync();
             }, null, 0, int.Parse(args[5]));
@@ -58,6 +60,6 @@ namespace TransactionManager
         public static void Main(string[] args)
         {
             MainAsync(args).GetAwaiter().GetResult();
-        } 
+        }
     }
 }

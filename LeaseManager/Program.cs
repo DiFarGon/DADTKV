@@ -3,16 +3,11 @@ using Grpc.Core;
 
 namespace LeaseManager
 {
-    internal class Program
+    class Program
     {
         public static void Main(string[] args)
         {
             // <clusterId> <id> <url> <lms> <tms> <time_slots> <start_time> <time_slot_duration> <config_file> <debug?>
-
-            foreach (string arg in args)
-            {
-                Console.WriteLine(arg);
-            }
 
             if (args.Length < 9 || args.Length > 10)
             {
@@ -26,10 +21,16 @@ namespace LeaseManager
 
             LeaseManager leaseManager = new LeaseManager(int.Parse(args[0]), args[1], args[2], debug);
 
+            var uri = new Uri(args[2]);
+            string host = uri.Host;
+            int port = uri.Port;
+
+            ServerPort serverPort = new ServerPort("localhost", port, ServerCredentials.Insecure);
+
             Server server = new Server
             {
                 Services = { LeaseManagerService.BindService(new LeaseManagerServiceImpl(leaseManager)) },
-                Ports = { new ServerPort("localhost", int.Parse(args[3]), ServerCredentials.Insecure) }
+                Ports = { serverPort }
             };
             server.Start();
 
@@ -41,7 +42,7 @@ namespace LeaseManager
             leaseManager.setTmClusterNodes(args[4]);
 
             DateTime startTime = DateTime.ParseExact(args[6], "HH:mm:ss", CultureInfo.InvariantCulture);
-            leaseManager.startService(startTime);
+            // leaseManager.startService(startTime);
         }
     }
 }
