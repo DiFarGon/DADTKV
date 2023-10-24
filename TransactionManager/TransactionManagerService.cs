@@ -1,80 +1,124 @@
 ﻿using Grpc.Core;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using System.Transactions;
 
 namespace TransactionManager
 {
-    class TransactionManagerServiceImpl : ClientService.ClientServiceBase
+    class TransactionManagerServiceImpl : TransactionManagerService.TransactionManagerServiceBase
     {
-
         TransactionManager transactionManager;
+
+        /// <summary>
+        /// Creates a new instance of TransactionManagerServiceImpl
+        /// </summary>
+        /// <param name="transactionManager"></param>
         public TransactionManagerServiceImpl(TransactionManager transactionManager)
         {
             this.transactionManager = transactionManager;
         }
 
-        public override Task<TransactionReply> Transaction(TransactionRequest transactionRequest, ServerCallContext context)
+        /// <summary>
+        /// On receiving a Transaction request from a Client tries to execute
+        /// the transaction. If it fails broadcasts a Lease request to all
+        /// Lease Managers.
+        /// </summary>
+        /// <param name="transactionRequest"></param>
+        /// <param name="context"></param>
+        /// <returns></returns>
+        public async override Task<TransactionResponse> Transaction(TransactionRequest transactionRequest, ServerCallContext context)
         {
-            transactionManager.Logger("Received Transaction Request");
+            this.transactionManager.Logger("Received Transaction Request");
 
-            LeaseRequest leaseRequest = new LeaseRequest { TmId = transactionManager.getId() };
+            TaskCompletionSource<TransactionResponse> tcs = new TaskCompletionSource<TransactionResponse>();
 
-            List<string> keysRead = new List<string>(transactionRequest.KeysRead);
-            List<DadInt> dadIntsWrite = new List<DadInt>(transactionRequest.KeysWrite);
-            
-            List<string> keysWrite = new List<string>();
-            foreach (DadInt dadInt in dadIntsWrite)
+            Transaction.Transaction transaction = new Transaction.Transaction(transactionRequest.TransactionMessage);
+
+            (bool success, List<DadInt.DadInt> read) = this.transactionManager.AttemptTransaction(transaction);
+            if (success)
             {
-                keysWrite.Add(dadInt.Key);
+                List<DadIntMessage> dadIntMessages = new List<DadIntMessage>();
+                foreach (DadInt.DadInt dadInt in read)
+                {
+                    dadIntMessages.Add(new DadIntMessage
+                    {
+                        Key = dadInt.Key,
+                        Value = dadInt.Value
+                    });
+                }
+                TransactionResponse response = new TransactionResponse();
+                response.Read.AddRange(dadIntMessages);
+                tcs.SetResult(response);
+                return tcs.Task.Result;
             }
 
-            List<string> keys = keysRead.Concat(keysWrite).ToList();
+            this.transactionManager.RequestLease(transaction);
 
-            foreach (string key in keys)
-            {
-                leaseRequest.Keys.Add(key);
-            }
+            this.transactionManager.StageTransaction(transaction, tcs);
 
-            transactionManager.Logger("Broadcasting lease request to lease managers");
+            await tcs.Task;
 
-            foreach (int clusterId in transactionManager.getLeaseManagersServices().Keys)
-            {
-                LeaseManagerService.LeaseManagerServiceClient channel = transactionManager.getLeaseManagersServices()[clusterId].Item2;
-                channel.LeaseAsync(leaseRequest);
-            }
-
-            var reply = new TransactionReply();
-            return Task.FromResult(reply);
+            return tcs.Task.Result;
         }
 
-        public override Task<StatusReply> Status(StatusRequest statusRequest, ServerCallContext context)
-        {
-            Console.WriteLine("I'm Alive");
-            transactionManager.sendStatusRequests();
-            var reply = new StatusReply();
-            return Task.FromResult(reply);
-        }
-
-
-    }
-    class TransactionManagerServiceImpl_TM : TransactionManagerService.TransactionManagerServiceBase
-    {
-        TransactionManager transactionManager;
-        public TransactionManagerServiceImpl_TM(TransactionManager transactionManager)
-        {
-            this.transactionManager = transactionManager;
-        }
-
-        public override Task<StatusReply_TM> Status_TM(StatusRequest_TM request, ServerCallContext context)
+        /// <summary>
+        /// Handles a Status rpc call, by logging this Transaction Manager status
+        /// </summary>
+        /// <param name="statusRequest"></param>
+        /// <param name="context"></param>
+        /// <returns></returns>
+        public override Task<StatusResponse> Status(StatusRequest statusRequest, ServerCallContext context)
         {
             transactionManager.Logger("I'm Alive");
-            var reply = new StatusReply_TM();
+
+            var reply = new StatusResponse();
             return Task.FromResult(reply);
         }
-    }
 
+        /// <summary>
+        /// Handles an AcknowledgeConsensus rpc by making
+        /// this Transaction Manager know what current leases
+        /// were assigned by the system
+        /// </summary>
+        /// <param name="request"></param>
+        /// <param name="context"></param>
+        /// <returns></returns>
+        public override Task<InstanceResultResponse> InstanceResult(InstanceResultRequest request, ServerCallContext context)
+        {
+            this.transactionManager.Logger("Acnkowledged consensus");
+
+            List<Lease.Lease> leases = new List<Lease.Lease>();
+            request.Result.ToList().ForEach(lease => {
+                leases.Add(new Lease.Lease(lease.TmId, new List<string>(lease.DataKeys)));
+            });
+            this.transactionManager.SetCurrentLeases(leases);
+            InstanceResultResponse response = new InstanceResultResponse();
+            return Task.FromResult(response);
+        }
+
+        /// <summary>
+        /// Handles a TransactionExecutedRequest by writing the changes
+        /// made to the DadInts store
+        /// </summary>
+        /// <param name="request"></param>
+        /// <param name="context"></param>
+        /// <returns></returns>
+        public override Task<TransactionExecutedResponse> TransactionExecuted(TransactionExecutedRequest request, ServerCallContext context)
+        {
+            this.transactionManager.Logger("Acknowledged execution of transaction");
+
+            Transaction.Transaction transaction = new Transaction.Transaction(request.TransactionMessage);
+            this.transactionManager.WriteTransactionToStore(transaction);
+            TransactionExecutedResponse response = new TransactionExecutedResponse();
+            return Task.FromResult(response);
+        }
+
+        public override Task<LeaseReleasedResponse> LeaseReleased(LeaseReleasedRequest request, ServerCallContext context)
+        {
+            this.transactionManager.Logger("Acknowledged releasing of lease");
+
+            Lease.Lease lease = new Lease.Lease(request.LeaseMessage);
+            this.transactionManager.RemoveLease(lease);
+
+            LeaseReleasedResponse response = new LeaseReleasedResponse();
+            return Task.FromResult(response);
+        }
+    }
 }
