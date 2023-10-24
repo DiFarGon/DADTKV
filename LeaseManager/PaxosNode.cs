@@ -34,7 +34,7 @@ namespace LeaseManager
     {
         private int id;
         private Dictionary<int, LeaseManagerService.LeaseManagerServiceClient> paxosClusterNodes = new Dictionary<int, LeaseManagerService.LeaseManagerServiceClient>();
-        private List<List<bool>> failureSuspicions;
+        private Dictionary<int, List<int>> failureSuspicions; // each index is a timeSlot and each entry is a list of suspected nodes
         private int currentInstance = 0;
         private int lastKnownLeader = 0;
         private bool leader = false;
@@ -48,18 +48,15 @@ namespace LeaseManager
         private List<Lease> leasesQueue = new List<Lease>(); // leases that have not been handled yet, key is the lease and value is the number of times it has been requested
 
 
-        public PaxosNode(int id, List<List<bool>> failureSuspicions)
+        public PaxosNode(int id)
         {
             this.id = id;
             this.ballotId = id;
-
-            this.failureSuspicions = failureSuspicions;
 
             if (id == 0)
             {
                 leader = true;
             }
-
         }
 
         public int getLastNotifiedInstance()
@@ -80,6 +77,11 @@ namespace LeaseManager
             }
         }
 
+        public void setFailureSuspicions(Dictionary<int, List<int>> failureSuspicions)
+        {
+            this.failureSuspicions = failureSuspicions;
+        }
+
         public void runPaxosInstance()
         {
             currentInstance++;
@@ -95,17 +97,18 @@ namespace LeaseManager
                     broadcastPrepare();
                 }
             }
+
         }
 
-        private bool isLeaderCandidate() // FIXME: this might change depending on the failure suspicions format
+        private bool isLeaderCandidate()
         {
-            int previousPriorityLeader; // TODO: maybe make this a field
+            int previousPriorityLeader;
             if (id == 0)
                 previousPriorityLeader = paxosClusterNodes.Count - 1;
             else
                 previousPriorityLeader = id - 1;
 
-            return lastKnownLeader == previousPriorityLeader && !failureSuspicions[currentInstance][previousPriorityLeader];
+            return lastKnownLeader == previousPriorityLeader && failureSuspicions[currentInstance].Contains(previousPriorityLeader);
         }
 
         public bool isLeader()

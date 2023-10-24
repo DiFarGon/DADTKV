@@ -7,24 +7,24 @@ namespace LeaseManager
     {
         public async static void Main(string[] args)
         {
-            // <run> <clusterId> <id> <url> <port> <lms> <tms> <time_slot_duration> <start_time> <failure_suspicions> <debug?>
+            // <clusterId> <id> <url> <lms> <tms> <time_slots> <start_time> <time_slot_duration> <crash_time_slot> <failure_suspicions> <debug?>
 
             foreach (string arg in args)
             {
                 Console.WriteLine(arg);
             }
 
-            if (args.Length < 9 || args.Length > 10)
+            if (args.Length < 10 || args.Length > 11)
             {
                 Console.WriteLine("Wrong number of arguments");
                 return;
             }
 
             bool debug = false;
-            if (args.Length == 10 && args[9] == "debug")
+            if (args.Length == 11 && args[10] == "debug")
                 debug = true;
 
-            LeaseManager leaseManager = new LeaseManager(int.Parse(args[0]), args[1], args[2], int.Parse(args[6]), LeaseManager.parseFailureSuspicions(args[8]), debug);
+            LeaseManager leaseManager = new LeaseManager(int.Parse(args[0]), args[1], args[2], debug);
 
             Server server = new Server
             {
@@ -33,12 +33,14 @@ namespace LeaseManager
             };
             server.Start();
 
-            Thread.Sleep(2000); // wait for servers to start
+            Thread.Sleep(1000); // wait for servers to start
 
-            leaseManager.setLeaseManagerNodes(args[4]);
-            leaseManager.setTmClusterNodes(args[5]);
+            leaseManager.configureExecution(int.Parse(args[5]), int.Parse(args[7]));
+            leaseManager.configureStateAndSuspicions(args[8], args[9]);
+            leaseManager.setLeaseManagerNodes(args[3]);
+            leaseManager.setTmClusterNodes(args[4]);
 
-            DateTime startTime = DateTime.ParseExact(args[7], "HH:mm:ss", CultureInfo.InvariantCulture);
+            DateTime startTime = DateTime.ParseExact(args[6], "HH:mm:ss", CultureInfo.InvariantCulture);
             DateTime currentTime = DateTime.Now;
             if (startTime > currentTime)
             {

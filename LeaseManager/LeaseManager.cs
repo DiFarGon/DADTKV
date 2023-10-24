@@ -20,34 +20,41 @@ namespace LeaseManager
         private bool debug;
         private PaxosNode paxosNode;
 
+        private int timeSlots;
         private int timeSlotDuration;
+        private int crashTimeSlot = -1;
 
         private Dictionary<int, GrpcChannel> ids_channels = new Dictionary<int, GrpcChannel>(); // key is the node's id and value is (lm id, channel)
-
-        private Dictionary<int, (string, LeaseManagerService.LeaseManagerServiceClient)> ids_lmsServices =
-            new Dictionary<int, (string, LeaseManagerService.LeaseManagerServiceClient)>();
 
         private Dictionary<int, (string, TransactionManagerService.TransactionManagerServiceClient)> ids_tmsServices =
             new Dictionary<int, (string, TransactionManagerService.TransactionManagerServiceClient)>();
 
         private List<Lease> receivedLeases = new List<Lease>();
 
-        public LeaseManager(int clusterId, string id, string url, int timeSlotDuration, List<List<bool>> failureSuspicions, bool debugMode)
+        public LeaseManager(int clusterId, string id, string url, bool debugMode)
         {
             this.id = id;
             this.clusterId = clusterId;
             this.url = url;
             this.debug = debugMode;
 
-            this.timeSlotDuration = timeSlotDuration;
-
-            GrpcChannel channel = GrpcChannel.ForAddress(url);
-            ids_channels[clusterId] = channel;
-            ids_lmsServices[clusterId] = (id, new LeaseManagerService.LeaseManagerServiceClient(channel)); // TODO: not sure if needed since node will only communicate with himself during paxos
-
-            paxosNode = new PaxosNode(clusterId, failureSuspicions);
+            paxosNode = new PaxosNode(clusterId);
 
             this.Logger("created");
+        }
+
+        public void configureExecution(int timeSlots, int timeSlotDuration)
+        {
+            this.timeSlotDuration = timeSlotDuration;
+            this.timeSlots = timeSlots;
+        }
+
+        public void configureStateAndSuspicions(string crashTimeSlot, string suspicions)
+        {
+            if (crashTimeSlot != "none")
+                this.crashTimeSlot = int.Parse(crashTimeSlot);
+            if (suspicions != "none")
+                paxosNode.setFailureSuspicions(parseFailureSuspicions(suspicions));
         }
 
         public void Logger(string message)
@@ -57,6 +64,11 @@ namespace LeaseManager
 
         public void setLeaseManagerNodes(string lms)
         {
+            // Channel to self
+            GrpcChannel channel;
+            channel = GrpcChannel.ForAddress(url);
+            ids_channels[clusterId] = channel;
+
             string[] keyValuePairs = lms.Split('!', StringSplitOptions.RemoveEmptyEntries);
 
             foreach (string pair in keyValuePairs)
@@ -66,8 +78,7 @@ namespace LeaseManager
                 string id = parts[1];
                 string url = parts[2];
 
-                GrpcChannel channel = GrpcChannel.ForAddress(url); // sets up channels to lm nodes
-                ids_lmsServices[n] = (id, new LeaseManagerService.LeaseManagerServiceClient(channel)); // sets up lm nodes
+                channel = GrpcChannel.ForAddress(url); // sets up channels to lm nodes
                 ids_channels[n] = channel;
             }
             setPaxosCluster(); // sets up paxos cluster nodes
@@ -105,11 +116,20 @@ namespace LeaseManager
             return paxosNode;
         }
 
-        // FIXME: maybe the type will not be List<List<bool>> but something else seen as the script will have (lm1, lm2) if lm1 suspects lm2
-        public static List<List<bool>> parseFailureSuspicions(string failureSuspicions)
+        public static Dictionary<int, List<int>> parseFailureSuspicions(string failureSuspicions)
         {
-            List<List<bool>> suspicions = new List<List<bool>>();
-            // FIXME:
+            Dictionary<int, List<int>> suspicions = new Dictionary<int, List<int>>();
+
+            string[] susps = failureSuspicions.Split('!', StringSplitOptions.RemoveEmptyEntries);
+
+            foreach (string susp in susps)
+            {
+                string[] parts = susp.Split(':');
+                if (!suspicions.ContainsKey(int.Parse(parts[0])))
+                    suspicions[int.Parse(parts[0])] = new List<int>();
+                foreach (string s in parts[1].Split(','))
+                    suspicions[int.Parse(parts[0])].Add(int.Parse(s));
+            }
             return suspicions;
         }
 
@@ -171,9 +191,22 @@ namespace LeaseManager
 
         public void startService()
         {
-            Timer paxosTimer = new Timer(state => paxosNode.runPaxosInstance(), null, 0, timeSlotDuration);
+            int currentTimeSlot = 0;
+            bool executionCompleted = false;
+            Timer timer = new Timer(state =>
+            {
+                if (!executionCompleted)
+                {
+                    currentTimeSlot++;
 
-            Timer notifyClientsTimer = new Timer(state => notifyClients(), null, 0, timeSlotDuration);
+                    paxosNode.runPaxosInstance();
+
+                    if (currentTimeSlot >= timeSlots)
+                        executionCompleted = true;
+
+                    notifyClients();
+                }
+            }, null, 0, timeSlotDuration);
         }
     }
 }
