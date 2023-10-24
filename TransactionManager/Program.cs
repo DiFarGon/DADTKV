@@ -38,6 +38,7 @@ namespace TransactionManager
             Thread.Sleep(1000); // wait for servers to start
 
             transactionManager.configureExecution(int.Parse(args[5]), int.Parse(args[7]));
+            transactionManager.configureStateAndSuspicions(args[8]);
             transactionManager.SetTmClusterNodes(args[4]);
             transactionManager.SetLmClusterNodes(args[3]);
 

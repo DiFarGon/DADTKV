@@ -203,15 +203,8 @@ namespace LeaseManager
             }
         }
 
-        public async void startService(DateTime startTime)
+        public async void startService()
         {
-            DateTime currentTime = DateTime.Now;
-            if (startTime > currentTime)
-            {
-                TimeSpan delay = startTime - currentTime;
-                await Task.Delay(delay);
-            }
-
             int currentTimeSlot = 0;
             bool executionCompleted = false;
             Timer timer = new Timer(state =>
