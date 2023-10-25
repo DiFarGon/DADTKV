@@ -58,7 +58,7 @@ namespace TransactionManager
             Dictionary<int, List<int>> suspicions = new Dictionary<int, List<int>>();
             using StreamReader reader = new StreamReader(configFile);
             {
-                string line;
+                string? line;
                 while ((line = reader.ReadLine()) != null)
                 {
                     if (line.StartsWith("F"))

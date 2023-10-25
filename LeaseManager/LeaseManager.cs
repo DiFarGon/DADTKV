@@ -122,7 +122,7 @@ namespace LeaseManager
             Dictionary<int, List<int>> suspicions = new Dictionary<int, List<int>>();
             using StreamReader reader = new StreamReader(configFile);
             {
-                string line;
+                string? line;
                 while ((line = reader.ReadLine()) != null)
                 {
                     if (line.StartsWith("F"))
@@ -197,7 +197,7 @@ namespace LeaseManager
                     };
 
                     if (!paxosNode.getInstanceState(instanceToNotify).isNo_op())
-                        request.Result = leasesListToLeasesListMessageTM(paxosNode.getInstanceState(instanceToNotify).value);
+                        request.Result = leasesListToLeasesListMessageTM(paxosNode.getInstanceState(instanceToNotify).getValue());
                     else
                         request.Result = null;
 

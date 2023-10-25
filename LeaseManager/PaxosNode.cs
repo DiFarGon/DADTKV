@@ -269,7 +269,7 @@ namespace LeaseManager
                 Id = this.id,
                 InstanceId = instance,
                 BallotId = calcBallotId(),
-                Value = leasesListToLeasesListMessage(instancesStates[instance].value),
+                Value = leasesListToLeasesListMessage(instancesStates[instance].getValue()),
             };
 
             foreach (KeyValuePair<int, LeaseManagerService.LeaseManagerServiceClient> pair in paxosClusterNodes)
