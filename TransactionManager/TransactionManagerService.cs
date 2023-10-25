@@ -25,7 +25,7 @@ namespace TransactionManager
         /// <returns></returns>
         public async override Task<TransactionResponse> Transaction(TransactionRequest transactionRequest, ServerCallContext context)
         {
-            this.transactionManager.Logger("Received Transaction Request");
+            this.transactionManager.Logger("Received Transaction Request: " + transactionRequest.TransactionMessage.KeysRead + "\n");
 
             TaskCompletionSource<TransactionResponse> tcs = new TaskCompletionSource<TransactionResponse>();
 
@@ -82,10 +82,11 @@ namespace TransactionManager
         /// <returns></returns>
         public override Task<InstanceResultResponse> InstanceResult(InstanceResultRequest request, ServerCallContext context)
         {
-            this.transactionManager.Logger("Acnkowledged consensus");
+            this.transactionManager.Logger($"Acnkowledged consensus on instance {request.InstanceId}.");
 
             List<Lease.Lease> leases = new List<Lease.Lease>();
-            request.Result.ToList().ForEach(lease => {
+            request.Result.ToList().ForEach(lease =>
+            {
                 leases.Add(new Lease.Lease(lease.TmId, new List<string>(lease.DataKeys)));
             });
             this.transactionManager.SetCurrentLeases(leases);

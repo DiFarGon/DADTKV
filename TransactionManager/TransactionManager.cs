@@ -89,6 +89,11 @@ namespace TransactionManager
                 }
             }
             this.failureSuspicions = suspicions;
+
+            foreach (KeyValuePair<int, List<int>> entry in suspicions)
+            {
+                this.Logger($"suspicions at time slot {entry.Key}: {string.Join(", ", entry.Value)}");
+            }
         }
 
         /// <summary>
@@ -313,13 +318,17 @@ namespace TransactionManager
             }
 
             List<string> keys = transaction.ReadKeys.Concat(keysWrite).ToList();
+            keys = keys.Distinct().ToList();
 
-            foreach (string key in keys) { leaseRequest.Keys.Add(key); }
+            Console.WriteLine("Requested keys: " + string.Join(", ", keys));
+            foreach (string key in keys)
+            {
+                leaseRequest.Keys.Add(key);
+            }
 
             foreach (LeaseManagerService.LeaseManagerServiceClient leaseManagerService in this.LmServices.Values)
             {
-                LeaseManagerService.LeaseManagerServiceClient channel = leaseManagerService;
-                channel.Lease(leaseRequest);
+                leaseManagerService.Lease(leaseRequest);
             }
         }
 

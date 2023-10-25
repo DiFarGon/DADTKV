@@ -2,6 +2,7 @@
 using System.Transactions;
 using System.Runtime.InteropServices;
 using System.Globalization;
+using System.IO.Pipes;
 
 namespace dadtkv
 {
@@ -16,10 +17,13 @@ namespace dadtkv
         private int slotDuration;
         private string startTime = "";
         private Func<ProcessInfo> assignTransactionManager;
-        private string configFile = "";
+        private string testFolder;
 
-        public MainProcess(bool debug)
+        private List<int> generatedProcessesIds = new List<int>();
+
+        public MainProcess(string testFolder, bool debug)
         {
+            this.testFolder = testFolder;
             this.debug = debug;
 
             string path = Environment.CurrentDirectory;
@@ -68,22 +72,21 @@ namespace dadtkv
             string[] tokens = line.Split(' ');
             string id = tokens[1];
             string type = tokens[2];
-            string url;
 
-            if (type == "C")
-            {
-                url = tokens[3];
-            }
-            else
-            {  // for now let's just run everything on the same machine
-                int port = new Uri(tokens[3]).Port;
-                url = $"http://localhost:{port}";
-            }
+            string url = tokens[3];
+
+            // if (type != "C")
+            // {  // for now let's just run everything on the same machine
+            //     int port = new Uri(tokens[3]).Port;
+            //     url = $"http://localhost:{port}";
+            // }
 
             switch (type)
             {
                 case "C":
-                    this.clients.Add(new ProcessInfo(id, url));
+                    ProcessInfo p = new ProcessInfo(id);
+                    p.setClientScriptFile("../dadtkv/" + tokens[3]);
+                    this.clients.Add(p);
                     break;
                 case "T":
                     this.transactionManagers.Add(new ProcessInfo(id, url));
@@ -114,55 +117,75 @@ namespace dadtkv
             this.Logger($"Test starts at {this.startTime}");
         }
 
-        internal void setConfigFile(string configFile)
+        private int launchClient(ProcessInfo client)
         {
-            this.configFile = "../dadtkv/" + configFile;
-        }
-
-        private void launchClient(ProcessInfo client)
-        {
-            // <id> <tms> <tm_id> <startTime> <debug?>
+            // <id> <tms> <tm_id> <startTime> <client_script_file> <debug?>
 
             this.Logger($"Creating new client with id '{client.getId()}' and url '{client.getUrl()}'");
 
-            string arguments = $"{client.getId()} {this.getAllTransactionManagersString()} {this.assignTransactionManager().getId()} {this.startTime}";
+            int pid;
+
+            string arguments = $"{client.getId()} {this.getAllTransactionManagersString()} {this.assignTransactionManager().getId()} {this.startTime} {client.getClientScriptFile()} ";
             if (this.debug) { arguments += " debug"; }
 
             if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
             {
                 string command = $"/c dotnet run --project {this.path}\\Client\\Client.csproj {arguments}";
                 Process.Start(new ProcessStartInfo(@"cmd.exe ", @command) { UseShellExecute = true });
+                pid = 0;
             }
-            // TODO: add multiple console window launching
             else
             {
-                string command = $"run --project {path}/Client/Client.csproj {arguments}";
-                Process.Start("dotnet", command);
+                string command = $"dotnet run --project {path}/Client/Client.csproj {arguments}";
+                ProcessStartInfo psi = new ProcessStartInfo("gnome-terminal")
+                {
+                    Arguments = $"-- bash -c \"{command}; exec bash\"",
+                    UseShellExecute = false,
+                    RedirectStandardOutput = true,
+                    CreateNoWindow = true
+                };
+                Process process = new Process { StartInfo = psi };
+                process.Start();
+                pid = process.Id;
             }
+            return pid;
         }
 
-        private void launchTransactionManager(ProcessInfo transactionManager)
+        private int launchTransactionManager(ProcessInfo transactionManager)
         {
             // <clusterId> <id> <url> <lms> <tms> <time_slots> <start_time> <time_slot_duration> <config_file> <debug?>
 
             this.Logger($"Creating new transaction manager with id '{transactionManager.getId()}' and url '{transactionManager.getUrl()}'");
 
+            int pid;
+
             (int clusterId, string clusterNodes) = this.getClusterIdAndTransactionManagersString(transactionManager);
-            string arguments = $"{clusterId} {transactionManager.getId()} {transactionManager.getUrl()} {this.getAllLeaseManagersString()} {clusterNodes} {this.slots} {this.startTime} {this.slotDuration} {this.configFile}";
+            if (clusterNodes == "") clusterNodes = "!"; // some ugly hammering to make the code work
+
+            string arguments = $"{clusterId} {transactionManager.getId()} {transactionManager.getUrl()} {this.getAllLeaseManagersString()} {clusterNodes} {this.slots} {this.startTime} {this.slotDuration} {getConfigFile()}";
             if (this.debug) { arguments += " debug"; }
 
             if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
             {
                 string command = $"/c dotnet run --project {this.path}\\TransactionManager\\TransactionManager.csproj {arguments}";
                 Process.Start(new ProcessStartInfo(@"cmd.exe ", @command) { UseShellExecute = true });
+                pid = 0;
             }
-            // TODO: add multiple console window launching
             else
             {
                 string command = $"dotnet run --project {path}/TransactionManager/TransactionManager.csproj {arguments}";
-                Process.Start("gnome-terminal", $"-- bash -c \"{command}; exec bash\"");
-
+                ProcessStartInfo psi = new ProcessStartInfo("gnome-terminal")
+                {
+                    Arguments = $"-- bash -c \"{command}; exec bash\"",
+                    UseShellExecute = false,
+                    RedirectStandardOutput = true,
+                    CreateNoWindow = true
+                };
+                Process process = new Process { StartInfo = psi };
+                process.Start();
+                pid = process.Id;
             }
+            return pid;
         }
 
         private string getAllLeaseManagersString()
@@ -193,28 +216,42 @@ namespace dadtkv
             return (clusterId, clusterNodes);
         }
 
-        private void launchLeaseManager(ProcessInfo leaseManager)
+        private int launchLeaseManager(ProcessInfo leaseManager)
         {
             // <clusterId> <id> <url> <lms> <tms> <time_slots> <start_time> <time_slot_duration> <config_file> <debug?>
 
             this.Logger($"Creating new lease manager with id '{leaseManager.getId()}' and url '{leaseManager.getUrl()}'");
 
+            int pid;
+
             (int clusterId, string clusterNodes) = this.getClusterIdAndLeaseManagersString(leaseManager);
 
-            string arguments = $"{clusterId} {leaseManager.getId()} {leaseManager.getUrl()} {clusterNodes} {this.getAllTransactionManagersString()} {this.slots} {this.startTime} {this.slotDuration} {this.configFile}";
+            if (clusterNodes == "") clusterNodes = "!"; // some ugly hammering to make the code work
+
+            string arguments = $"{clusterId} {leaseManager.getId()} {leaseManager.getUrl()} {clusterNodes} {this.getAllTransactionManagersString()} {this.slots} {this.startTime} {this.slotDuration} {getConfigFile()}";
             if (this.debug) { arguments += " debug"; }
 
             if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
             {
                 string command = $"/c dotnet run --project {this.path}\\LeaseManager\\LeaseManager.csproj {arguments}";
                 Process.Start(new ProcessStartInfo(@"cmd.exe ", @command) { UseShellExecute = true });
+                pid = 0;
             }
-            // TODO: add multiple console window launching
             else
             {
                 string command = $"dotnet run --project {this.path}/LeaseManager/LeaseManager.csproj {arguments}";
-                Process.Start("gnome-terminal", $"-- bash -c \"{command}; exec bash\"");
+                ProcessStartInfo psi = new ProcessStartInfo("gnome-terminal")
+                {
+                    Arguments = $"-- bash -c \"{command}; exec bash\"",
+                    UseShellExecute = false,
+                    RedirectStandardOutput = true,
+                    CreateNoWindow = true
+                };
+                Process process = new Process { StartInfo = psi };
+                process.Start();
+                pid = process.Id;
             }
+            return pid;
         }
 
         private (int, string) getClusterIdAndLeaseManagersString(ProcessInfo leaseManager)
@@ -245,19 +282,31 @@ namespace dadtkv
             return transactionManagers;
         }
 
+        public string getConfigFile() { return this.testFolder + "/config.txt"; }
+
         public void launchProcesses()
         {
             foreach (ProcessInfo transactionManager in this.transactionManagers)
             {
-                this.launchTransactionManager(transactionManager);
+                generatedProcessesIds.Add(launchTransactionManager(transactionManager));
             }
             foreach (ProcessInfo leaseManager in this.leaseManagers)
             {
-                this.launchLeaseManager(leaseManager);
+                generatedProcessesIds.Add(launchLeaseManager(leaseManager));
             }
             foreach (ProcessInfo client in this.clients)
             {
-                this.launchClient(client);
+                generatedProcessesIds.Add(launchClient(client));
+            }
+        }
+
+        public void terminateProcesses()
+        {
+            foreach (int pid in generatedProcessesIds)
+            {
+                Process process = Process.GetProcessById(pid);
+                if (!process.HasExited)
+                    process.Kill(); // TODO: this should be a signal so that the processes can gracefully terminate (close channels and such)
             }
         }
     }
@@ -265,7 +314,8 @@ namespace dadtkv
     internal class ProcessInfo
     {
         private string id;
-        private string url;
+        private string url = "";
+        private string clientSrciptFile = "";
 
         public ProcessInfo(string id, string url)
         {
@@ -273,8 +323,16 @@ namespace dadtkv
             this.url = url;
         }
 
+        public ProcessInfo(string id)
+        {
+            this.id = id;
+        }
+
         public string getId() { return this.id; }
 
         public string getUrl() { return this.url; }
+
+        public string getClientScriptFile() { return this.clientSrciptFile; }
+        public void setClientScriptFile(string clientScriptFile) { this.clientSrciptFile = clientScriptFile; }
     }
 }

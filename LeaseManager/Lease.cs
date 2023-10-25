@@ -31,11 +31,14 @@ namespace LeaseManager
             }
         }
 
-        public override bool Equals(object? obj)
+        public bool isSame(Lease lease)
         {
-            return obj is Lease lease &&
-                   TmId == lease.TmId &&
-                   EqualityComparer<List<string>>.Default.Equals(Keys, lease.Keys);
+            return this.TmId == lease.TmId && this.Keys.SequenceEqual(lease.Keys);
+        }
+
+        public override string ToString()
+        {
+            return $"[{TmId}: {string.Join(", ", Keys)}]";
         }
 
         public override int GetHashCode()

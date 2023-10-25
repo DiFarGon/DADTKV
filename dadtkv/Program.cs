@@ -17,10 +17,9 @@ namespace dadtkv
                 debug = true;
             }
 
-            MainProcess mainProcess = new MainProcess(debug);
+            MainProcess mainProcess = new MainProcess(args[0], debug);
 
-            Console.WriteLine(args[0]);
-            string[] script = File.ReadAllLines(args[0]);
+            string[] script = File.ReadAllLines(args[0] + "/config.txt");
 
             foreach (string line in script)
             {
@@ -42,8 +41,15 @@ namespace dadtkv
                         break;
                 }
             }
-            mainProcess.setConfigFile(args[0]);
             mainProcess.launchProcesses();
+
+            Console.WriteLine("Press any key to terminante the system.");
+
+            while (!Console.KeyAvailable) { }
+
+            Console.WriteLine("Terminating System.");
+            mainProcess.terminateProcesses();
+
             return;
         }
     }

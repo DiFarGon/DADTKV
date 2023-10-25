@@ -1,0 +1,10 @@
+P TM1 T http://localhost:10000
+P LM1 L http://localhost:10004
+#
+P C1 C tests/test1/client/client-script-1.txt
+#
+S 100
+#
+T 16:15:15
+#
+D 10000

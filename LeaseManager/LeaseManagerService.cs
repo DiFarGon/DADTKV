@@ -18,6 +18,8 @@ namespace LeaseManager
 
         public override Task<LeaseResponse> Lease(LeaseRequest request, ServerCallContext context)
         {
+            leaseManager.Logger("Received Lease Request from " + request.TmId + "\n" + request.Keys + "\n");
+
             leaseManager.registerLease(request.TmId, request.Keys.ToList());
             LeaseResponse response = new LeaseResponse();
             return Task.FromResult(response);
@@ -25,6 +27,8 @@ namespace LeaseManager
 
         public override Task<PrepareResponse> Prepare(PrepareRequest request, ServerCallContext context)
         {
+            leaseManager.Logger("Received Prepare Request from " + request.Id + "\n");
+
             PrepareResponse response = new PrepareResponse();
 
             PaxosNode paxosNode = leaseManager.getPaxosNode();
@@ -54,13 +58,20 @@ namespace LeaseManager
 
         public override Task<AcceptResponse> Accept(AcceptRequest request, ServerCallContext context)
         {
-            AcceptResponse response = new AcceptResponse();
+            leaseManager.Logger($"Received Accept Request from {request.Id} for instance {request.InstanceId}. Value: {LeaseManager.LeasesListToString(PaxosNode.LeasesListMessageToLeasesList(request.Value))} \n");
 
             PaxosNode paxosNode = leaseManager.getPaxosNode();
             InstanceState instanceState = paxosNode.getInstanceState(request.InstanceId);
 
+            AcceptResponse response = new AcceptResponse()
+            {
+                Id = paxosNode.getId(),
+                InstanceId = request.InstanceId,
+            };
+
             if (request.BallotId == paxosNode.getMostRecentReadTS())
                 paxosNode.setLastKnownLeader(request.Id);
+
 
             if (request.BallotId == instanceState.getRTS())
             {
@@ -82,11 +93,20 @@ namespace LeaseManager
 
         public override Task<DecidedResponse> Decided(DecidedRequest request, ServerCallContext context)
         {
+            leaseManager.Logger($"Received Decided Request from {request.Id} for instance {request.InstanceId}. Value: {LeaseManager.LeasesListToString(PaxosNode.LeasesListMessageToLeasesList(request.Value))} \n");
+
             DecidedResponse response = new DecidedResponse();
 
             PaxosNode paxosNode = leaseManager.getPaxosNode();
             InstanceState instanceState = paxosNode.getInstanceState(request.InstanceId);
             instanceState.setDecided(true);
+
+            paxosNode.updateLeasesQueue(PaxosNode.LeasesListMessageToLeasesList(request.Value));
+
+            foreach (KeyValuePair<int, InstanceState> kvp in paxosNode.getInstancesStates())
+            {
+                Console.WriteLine($"instance {kvp.Key}: < {kvp.Value.getRTS()}, {kvp.Value.getWTS()}, {LeaseManager.LeasesListToString(kvp.Value.getValue())}> decided: {kvp.Value.isDecided()}, no_op: {kvp.Value.isNo_op()} \n");
+            }
 
             return Task.FromResult(response);
         }

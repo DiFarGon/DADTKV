@@ -58,7 +58,7 @@ namespace Lease
         public bool ConflictsWith(Lease lease)
         {
             if (this.TmId == lease.TmId) return false;
-            foreach(string key in lease.Keys)
+            foreach (string key in lease.Keys)
             {
                 if (this.Keys.Contains(key)) { return true; }
             }

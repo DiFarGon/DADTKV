@@ -11,8 +11,8 @@ namespace LeaseManager
 {
     public class InstanceState
     {
-        private int readTS = -1;
-        private int writeTS = -1;
+        private int readTS = 0;
+        private int writeTS = 0;
         private List<Lease> value = new List<Lease>();
         private bool decided = false;
         private bool no_op = false;
@@ -101,6 +101,8 @@ namespace LeaseManager
 
         public void runPaxosInstance()
         {
+            if (leasesQueue.Count == 0)
+                return;
             currentInstance++;
             instancesStates[currentInstance] = new InstanceState();
             if (leader)
@@ -114,7 +116,6 @@ namespace LeaseManager
                     broadcastPrepare();
                 }
             }
-
         }
 
         public async void broadcastPrepare()
@@ -214,7 +215,8 @@ namespace LeaseManager
             else
             {
                 List<Lease> valueToPropose = instancesStates[instance].getValue();
-                valueToPropose ??= calcValueToPropose();
+                if (valueToPropose.Count == 0)
+                    valueToPropose = calcValueToPropose();
                 request.Value = leasesListToLeasesListMessage(valueToPropose);
             }
 
@@ -257,6 +259,7 @@ namespace LeaseManager
                     if (acceptsCount > paxosClusterNodes.Count / 2)
                     {
                         broadcastDecided(response.InstanceId);
+                        break;
                     }
                 }
             }
@@ -264,6 +267,7 @@ namespace LeaseManager
 
         public void broadcastDecided(int instance)
         {
+            Console.WriteLine($"broadcasting decided for instance {instance}");
             DecidedRequest request = new DecidedRequest
             {
                 Id = this.id,
@@ -299,6 +303,11 @@ namespace LeaseManager
                 found = false;
             }
             return valueToPropose;
+        }
+
+        public int getId()
+        {
+            return id;
         }
 
         private bool isLeaderCandidate()
@@ -390,6 +399,28 @@ namespace LeaseManager
             return instancesStates[instanceId];
         }
 
+        public ConcurrentDictionary<int, InstanceState> getInstancesStates()
+        {
+            return instancesStates;
+        }
+
+        public void updateLeasesQueue(List<Lease> leases)
+        {
+            foreach (Lease lease in leases)
+            {
+                Console.WriteLine($"lease: {lease}");
+                foreach (Lease l in leasesQueue)
+                {
+                    Console.WriteLine($"l: {l}");
+                    if (l.isSame(lease))
+                    {
+                        Console.WriteLine($"removing {l} from leases queue");
+                        leasesQueue.Remove(l);
+                        break;
+                    }
+                }
+            }
+        }
         public static InstanceStateMessage instanceStateToInstanceStateMessage(InstanceState instanceState)
         {
             InstanceStateMessage instanceStateMessage = new InstanceStateMessage

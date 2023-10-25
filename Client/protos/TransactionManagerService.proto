@@ -20,6 +20,7 @@ message TransactionResponse {
 
 message InstanceResultResponse { }
 
+
 message TransactionMessage {
 	repeated string keysRead = 1;
 	repeated DadIntMessage dadIntsWrite = 2;

@@ -188,8 +188,10 @@ namespace LeaseManager
             while (true)
             {
                 int instanceToNotify = paxosNode.getLastNotifiedInstance() + 1;
-                if (paxosNode.getInstanceState(instanceToNotify).isDecided())
+
+                if (paxosNode.getInstancesStates().ContainsKey(instanceToNotify) && paxosNode.getInstanceState(instanceToNotify).isDecided())
                 {
+                    Logger($"propagating instance {instanceToNotify} result.");
                     InstanceResultRequest request = new InstanceResultRequest()
                     {
                         LmId = clusterId,
@@ -211,6 +213,14 @@ namespace LeaseManager
                     break;
 
             }
+        }
+
+        public static string LeasesListToString(List<Lease> leases)
+        {
+            string result = "";
+            foreach (Lease lease in leases)
+                result += lease.ToString() + ";";
+            return result;
         }
 
         public void closeChannels()
@@ -236,6 +246,8 @@ namespace LeaseManager
 
                     if (currentTimeSlot < timeSlots)
                         paxosNode.runPaxosInstance();
+
+                    this.Logger($"current time slot: {currentTimeSlot}");
 
                     notifyClients();
 

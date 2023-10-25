@@ -15,9 +15,10 @@ namespace Client
         private string id;
         private string assignedTmId;
         private bool debug;
-        private GrpcChannel channel;
+
         private Dictionary<string, string> ids_tmServices = new Dictionary<string, string>(); // <tm_cluster_id, url>
-        private TransactionManagerService.TransactionManagerServiceClient tmClient;
+        private GrpcChannel? channel = null;
+        private TransactionManagerService.TransactionManagerServiceClient? tmClient;
 
         /// <summary>
         /// Creates a new Client with given parameters
@@ -49,6 +50,7 @@ namespace Client
 
         public void setTmClusterNodes(string tms)
         {
+            this.Logger("set transaction managers");
             string[] keyValuePairs = tms.Split('!', StringSplitOptions.RemoveEmptyEntries);
 
             foreach (string pair in keyValuePairs)
@@ -66,7 +68,6 @@ namespace Client
                     this.tmClient = new TransactionManagerService.TransactionManagerServiceClient(channel);
                 }
             }
-            this.Logger("set transaction managers");
         }
 
         /// <summary>
@@ -102,7 +103,11 @@ namespace Client
             string stringRead = matchesInput.Count > 0 ? matchesInput[0].Groups[1].Value : "";
             string stringWrite = matchesInput.Count > 1 ? matchesInput[1].Groups[1].Value : "";
 
+            Console.WriteLine("Read: " + stringRead);
+            Console.WriteLine("Write: " + stringWrite);
+
             TransactionMessage transactionMessage = new TransactionMessage { };
+
             //Read keys for transaction
             if (!stringRead.Equals(""))
             {
@@ -126,9 +131,10 @@ namespace Client
                 }
             }
 
+            transactionRequest.TransactionMessage = transactionMessage;
+
             //if after 15 seconds didn't receive reply from server, it tries with another one
-            var callOptions = new CallOptions(deadline: DateTime.UtcNow.AddSeconds(15));
-            //wait for the response
+            CallOptions callOptions = new CallOptions(deadline: DateTime.UtcNow.AddSeconds(15));
             try
             {
                 TransactionResponse response = tmClient.Transaction(transactionRequest, callOptions);
