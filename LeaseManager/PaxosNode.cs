@@ -11,11 +11,24 @@ namespace LeaseManager
 {
     public class InstanceState
     {
-        public int readTS = -1; // TODO: maybe don't need to store this, i think the mostRecentReadTS from PaxosNode is enough
-        public int writeTS = -1;
-        public List<Lease>? value = null;
-        public bool decided = false;
-        public bool no_op = false;
+        private int readTS = -1;
+        private int writeTS = -1;
+        private List<Lease> value = new List<Lease>();
+        private bool decided = false;
+        private bool no_op = false;
+
+        public InstanceState() { }
+        public int getRTS() { return readTS; }
+        public int getWTS() { return writeTS; }
+        public List<Lease> getValue() { return value; }
+        public bool isDecided() { return decided; }
+        public bool isNo_op() { return no_op; }
+
+        public void setRTS(int readTS) { this.readTS = readTS; }
+        public void setWTS(int writeTS) { this.writeTS = writeTS; }
+        public void setValue(List<Lease> value) { this.value = value; }
+        public void setDecided(bool decided) { this.decided = decided; }
+        public void setNo_op(bool no_op) { this.no_op = no_op; }
 
         public bool containsLease(Lease lease)
         {
@@ -37,12 +50,13 @@ namespace LeaseManager
         private Dictionary<int, List<int>> failureSuspicions = new Dictionary<int, List<int>>(); // each index is a timeSlot and each entry is a list of suspected nodes
         private int currentInstance = 0;
         private int lastKnownLeader = 0;
-        private bool leader = false;
         private int previousPriorityLeader;
 
+        private bool leader = false;
+
         private int roundId = 0;
-        private int ballotId; // combination of nodes id and round id (e.g. for node 1 and round 2, ballotId = 2 * clusterSize + 1 = 3)
         private int mostRecentReadTS = 0;
+
         private ConcurrentDictionary<int, InstanceState> instancesStates = new ConcurrentDictionary<int, InstanceState>();
         private int lastNotifiedInstance = 0;
 
@@ -52,7 +66,6 @@ namespace LeaseManager
         public PaxosNode(int id)
         {
             this.id = id;
-            this.ballotId = id;
 
             if (id == 0)
             {
@@ -106,15 +119,14 @@ namespace LeaseManager
 
         public async void broadcastPrepare()
         {
-            incrementBallotId();
+            setRoundId(roundId + 1);
+            int ballotId = calcBallotId();
 
             List<int> unresolvedInstances = new List<int>();
             foreach (KeyValuePair<int, InstanceState> pair in instancesStates)
             {
-                if (!pair.Value.decided)
-                {
+                if (!pair.Value.isDecided())
                     unresolvedInstances.Add(pair.Key);
-                }
             }
 
             PrepareRequest request = new PrepareRequest
@@ -147,39 +159,39 @@ namespace LeaseManager
                 if (!response.Ok)
                 {
                     nacksCount++;
-                    setRoundId(Math.Max(roundId, (response.MostRecentReadTS - response.Id) / paxosClusterNodes.Count));
+                    setRoundId(Math.Max(roundId, (response.MostRecentReadTS - response.MostRecentReadTS % getClusterSize()) / getClusterSize()));
                     if (nacksCount > paxosClusterNodes.Count / 2)
                     {
+                        setLeader(false);
                         break;
                     }
                 }
                 else
                 {
                     promisesCount++;
-                    foreach (var kvp in response.InstancesStates)
+                    foreach (KeyValuePair<int, InstanceStateMessage> kvp in response.InstancesStates)
                     {
                         // if the instance state is more recent than the one stored, update it
-                        if (kvp.Value.WriteTS > instancesStates[kvp.Key].writeTS)
+                        if (kvp.Value.WriteTS > instancesStates[kvp.Key].getWTS())
                         {
-                            instancesStates[kvp.Key].writeTS = kvp.Value.WriteTS;
-                            instancesStates[kvp.Key].value = LeasesListMessageToLeasesList(kvp.Value.Value);
+                            instancesStates[kvp.Key].setWTS(kvp.Value.WriteTS);
+                            instancesStates[kvp.Key].setValue(LeasesListMessageToLeasesList(kvp.Value.Value));
                         }
                     }
 
                     if (promisesCount > paxosClusterNodes.Count / 2)
                     {
+                        // here the node sending the prepares is ready to send accept msgs, it will do this for each instance that has not been decided yet
+
                         leader = true;
                         setLastKnownLeader(id);
-                        // here the node sending the prepares is ready to send accept msgs, it will do this for each instance that has not been decided yet
-                        foreach (KeyValuePair<int, InstanceState> pair in instancesStates)
+                        foreach (KeyValuePair<int, InstanceState> kvp in instancesStates)
                         {
-                            if (!pair.Value.decided)
+                            if (!kvp.Value.isDecided())
                             {
-                                if (pair.Value.value == null && pair.Key < currentInstance)
-                                {
-                                    pair.Value.no_op = true;
-                                }
-                                broadcastAccept(pair.Key);
+                                if (kvp.Value.getValue() == null && kvp.Key < currentInstance)
+                                    kvp.Value.setNo_op(true);
+                                broadcastAccept(kvp.Key);
                             }
                         }
                         break;
@@ -194,21 +206,15 @@ namespace LeaseManager
             {
                 Id = this.id,
                 InstanceId = instance,
-                BallotId = ballotId,
+                BallotId = calcBallotId(),
             };
 
-            if (!instancesStates[instance].no_op)
-            {
+            if (instancesStates[instance].isNo_op())
                 request.Value = null;
-            }
             else
             {
-                List<Lease>? valueToPropose = instancesStates[instance].value;
-
-                if (valueToPropose == null)
-                {
-                    valueToPropose = calcValueToPropose();
-                }
+                List<Lease> valueToPropose = instancesStates[instance].getValue();
+                valueToPropose ??= calcValueToPropose();
                 request.Value = leasesListToLeasesListMessage(valueToPropose);
             }
 
@@ -236,7 +242,7 @@ namespace LeaseManager
                 if (!response.Ok)
                 {
                     nacksCount++;
-                    setRoundId(Math.Max(roundId, (response.MostRecentReadTS - response.Id) / paxosClusterNodes.Count));
+                    setRoundId(Math.Max(roundId, (response.MostRecentReadTS - response.MostRecentReadTS % getClusterSize()) / getClusterSize()));
 
                     // here the node sending these accepts should stop being a leader because it has seen that a node with a higher ballotId (has priority) is playing the proposer role
                     if (nacksCount > paxosClusterNodes.Count / 2)
@@ -262,7 +268,7 @@ namespace LeaseManager
             {
                 Id = this.id,
                 InstanceId = instance,
-                BallotId = ballotId,
+                BallotId = calcBallotId(),
                 Value = leasesListToLeasesListMessage(instancesStates[instance].value),
             };
 
@@ -280,7 +286,7 @@ namespace LeaseManager
             {
                 foreach (KeyValuePair<int, InstanceState> pair in instancesStates)
                 {
-                    if (pair.Value.writeTS != -1 && pair.Value.containsLease(lease))
+                    if (pair.Value.containsLease(lease))
                     {
                         found = true;
                         break;
@@ -288,6 +294,9 @@ namespace LeaseManager
                 }
                 if (!found)
                     valueToPropose.Add(lease);
+                else
+                    leasesQueue.Remove(lease);
+                found = false;
             }
             return valueToPropose;
         }
@@ -309,7 +318,8 @@ namespace LeaseManager
 
         public void setLastKnownLeader(int leaderId)
         {
-            lastKnownLeader = leaderId;
+            if (leaderId != lastKnownLeader)
+                lastKnownLeader = leaderId;
         }
 
         public int getMostRecentReadTS()
@@ -327,10 +337,9 @@ namespace LeaseManager
             this.roundId = roundId;
         }
 
-        private void incrementBallotId()
+        private int calcBallotId()
         {
-            roundId++;
-            ballotId = roundId * paxosClusterNodes.Count + id;
+            return roundId * paxosClusterNodes.Count + id;
         }
 
         public void addLeaseToQueue(Lease lease)
@@ -385,30 +394,12 @@ namespace LeaseManager
         {
             InstanceStateMessage instanceStateMessage = new InstanceStateMessage
             {
-                ReadTS = instanceState.readTS,
-                WriteTS = instanceState.writeTS,
-                Value = leasesListToLeasesListMessage(instanceState.value),
-                Decided = instanceState.decided,
+                ReadTS = instanceState.getRTS(),
+                WriteTS = instanceState.getWTS(),
+                Value = leasesListToLeasesListMessage(instanceState.getValue()),
+                Decided = instanceState.isDecided(),
             };
             return instanceStateMessage;
-        }
-
-        public void setInstanceStateWriteTS(int instanceId, int wts)
-        {
-            instancesStates[instanceId].writeTS = wts;
-        }
-
-        public void setInstanceStateValue(int instanceId, List<Lease>? value)
-        {
-            if (value == null)
-                instancesStates[instanceId].no_op = true;
-            else
-                instancesStates[instanceId].value = value;
-        }
-
-        public void setInstanceStateDecided(int instanceId)
-        {
-            instancesStates[instanceId].decided = true;
         }
     }
 }

@@ -25,65 +25,68 @@ namespace LeaseManager
 
         public override Task<PrepareResponse> Prepare(PrepareRequest request, ServerCallContext context)
         {
-            PaxosNode paxosNode = leaseManager.getPaxosNode();
-
             PrepareResponse response = new PrepareResponse();
+
+            PaxosNode paxosNode = leaseManager.getPaxosNode();
 
             if (request.BallotId > paxosNode.getMostRecentReadTS())
             {
                 response.Ok = true;
                 foreach (int instanceId in request.UnresolvedInstances)
                 {
+                    paxosNode.getInstanceState(instanceId).setRTS(request.BallotId);
                     response.InstancesStates.Add(instanceId, PaxosNode.instanceStateToInstanceStateMessage(paxosNode.getInstanceState(instanceId)));
                 }
+
                 paxosNode.setMostRecentReadTS(request.BallotId);
                 paxosNode.setRoundId((request.BallotId - request.Id) / paxosNode.getClusterSize());
-                paxosNode.setLastKnownLeader(request.Id);
+
                 if (paxosNode.isLeader())
-                {
                     paxosNode.setLeader(false);
-                }
             }
             else
             {
                 response.Ok = false;
                 response.MostRecentReadTS = paxosNode.getMostRecentReadTS();
             }
-
             return Task.FromResult(response);
         }
 
         public override Task<AcceptResponse> Accept(AcceptRequest request, ServerCallContext context)
         {
-            PaxosNode paxosNode = leaseManager.getPaxosNode();
-
             AcceptResponse response = new AcceptResponse();
 
+            PaxosNode paxosNode = leaseManager.getPaxosNode();
+            InstanceState instanceState = paxosNode.getInstanceState(request.InstanceId);
+
             if (request.BallotId == paxosNode.getMostRecentReadTS())
+                paxosNode.setLastKnownLeader(request.Id);
+
+            if (request.BallotId == instanceState.getRTS())
             {
                 response.Ok = true;
-                paxosNode.setInstanceStateWriteTS(request.InstanceId, request.BallotId);
+                instanceState.setWTS(request.BallotId);
+
                 if (request.Value == null)
-                    paxosNode.setInstanceStateValue(request.InstanceId, null);
+                    instanceState.setNo_op(true);
                 else
-                    paxosNode.setInstanceStateValue(request.InstanceId, PaxosNode.LeasesListMessageToLeasesList(request.Value));
+                    instanceState.setValue(PaxosNode.LeasesListMessageToLeasesList(request.Value));
             }
             else
             {
                 response.Ok = false;
-                response.MostRecentReadTS = paxosNode.getMostRecentReadTS();
+                response.MostRecentReadTS = instanceState.getRTS();
             }
-
             return Task.FromResult(response);
         }
 
         public override Task<DecidedResponse> Decided(DecidedRequest request, ServerCallContext context)
         {
-            PaxosNode paxosNode = leaseManager.getPaxosNode();
-
             DecidedResponse response = new DecidedResponse();
 
-            paxosNode.setInstanceStateDecided(request.InstanceId);
+            PaxosNode paxosNode = leaseManager.getPaxosNode();
+            InstanceState instanceState = paxosNode.getInstanceState(request.InstanceId);
+            instanceState.setDecided(true);
 
             return Task.FromResult(response);
         }
