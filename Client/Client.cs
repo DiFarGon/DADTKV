@@ -141,7 +141,13 @@ namespace Client
                 this.Logger("Received response");
                 foreach (DadIntMessage di in response.Read)
                 {
-                    Console.WriteLine("DadInt" + di.Key + "with value:" + di.Value);
+                    if (di.Value == int.MinValue)
+                    {
+                        Console.WriteLine("DadInt" + di.Key + "with value:" + "null");
+                    } else
+                    {
+                        Console.WriteLine("DadInt" + di.Key + "with value:" + di.Value);
+                    }
                 }
             }
             catch (Exception e)
