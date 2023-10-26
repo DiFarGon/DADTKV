@@ -31,7 +31,7 @@ namespace Client
                 await Task.Delay(delay);
             }
 
-            Thread.Sleep(1000);
+            Thread.Sleep(2000);
 
             client.setTmClusterNodes(args[1]);
 

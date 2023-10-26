@@ -152,7 +152,7 @@ namespace TransactionManager
         /// <param name="leases"></param>
         public void SetCurrentLeases(List<Lease.Lease> leases)
         {
-            this.Logger("Setting current leases list");
+            this.Logger("Setting current leases list:" + leases[0].ToString() + "\n");
             this.currentLeases.AddRange(leases);
             this.UpdateHeldLeases();
         }
@@ -172,8 +172,10 @@ namespace TransactionManager
             foreach (Lease.Lease lease in this.currentLeases)
             {
                 if (this.heldLeases.Contains(lease)) continue;
+                this.Logger($"lease id: {lease.TmId} my id: {this.Id}");
                 if (this.Id == lease.TmId)
                 {
+                    this.Logger("same ids");
                     List<Lease.Lease> conflictingLeases = lease.ConflictsWithAny(this.currentLeases);
                     foreach (Lease.Lease conflictingLease in conflictingLeases)
                     {
@@ -181,6 +183,10 @@ namespace TransactionManager
                         {
                             this.heldLeases.Add(lease);
                         }
+                    }
+                    if (conflictingLeases.Count() == 0)
+                    {
+                        this.heldLeases.Add(lease);
                     }
                 }
             }
@@ -195,12 +201,12 @@ namespace TransactionManager
         /// </summary>
         private void ReleaseConflictingLeases()
         {
-            this.Logger("Releasing conflicting leases");
 
             foreach (Lease.Lease lease in this.heldLeases)
             {
                 if (lease.ConflictsWithAny(this.currentLeases).Count != 0)
                 {
+                    this.Logger("Releasing conflicting lease:" + lease.ToString() + "\n");
                     this.AttemptOnlyFirstTransaction();
                     this.heldLeases.Remove(lease);
                     this.currentLeases.Remove(lease);
@@ -244,6 +250,7 @@ namespace TransactionManager
             List<string> keys = new List<string>();
             foreach (Lease.Lease lease in this.heldLeases)
             {
+                this.Logger("Lease: " + lease.ToString());
                 keys = keys.Union(lease.Keys).ToList();
             }
             return keys;
@@ -277,7 +284,7 @@ namespace TransactionManager
         private bool AttemptOnlyFirstTransaction()
         {
             this.Logger("Attempting first pending transaction");
-            (Transaction.Transaction transaction, TaskCompletionSource<TransactionResponse> tcs) = this.pendingTransactions[1];
+            (Transaction.Transaction transaction, TaskCompletionSource<TransactionResponse> tcs) = this.pendingTransactions[0];
             (bool, List<DadInt.DadInt>) result = this.AttemptTransaction(transaction);
             if (result.Item1)
             {
@@ -356,18 +363,19 @@ namespace TransactionManager
         {
             this.Logger("Executing transaction");
 
-            this.WriteTransactionToStore(transaction);
             List<DadInt.DadInt> readDadInts = new List<DadInt.DadInt>();
             foreach (string key in transaction.ReadKeys)
             {
                 if (this.store.ContainsKey(key))
                 {
                     readDadInts.Add(this.store[key]);
-                } else
+                }
+                else
                 {
                     readDadInts.Add(new DadInt.DadInt(key, int.MinValue));
                 }
             }
+            this.WriteTransactionToStore(transaction);
             this.CommunicateTransactionExecuted(transaction);
             return readDadInts;
         }
@@ -411,6 +419,9 @@ namespace TransactionManager
                     requiredKeys.Add(dadInt.Key);
                 }
             }
+
+
+            this.Logger("Keys held: " + string.Join(", ", keysHeld));
 
             bool allRequiredKeysHeld = requiredKeys.All(element => keysHeld.Contains(element));
             if (allRequiredKeysHeld)

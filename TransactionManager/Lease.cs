@@ -95,6 +95,11 @@ namespace Lease
                    EqualityComparer<List<string>>.Default.Equals(Keys, lease.Keys);
         }
 
+        public override string ToString()
+        {
+            return $"[{TmId}: {string.Join(", ", Keys)}]";
+        }
+
         /// <summary>
         /// Default hash function
         /// </summary>

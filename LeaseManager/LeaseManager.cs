@@ -175,14 +175,6 @@ namespace LeaseManager
             return leaseMessage;
         }
 
-        public static LeasesListMessageTM leasesListToLeasesListMessageTM(List<Lease> leases)
-        {
-            LeasesListMessageTM leasesListMessage = new LeasesListMessageTM();
-            foreach (Lease lease in leases)
-                leasesListMessage.Leases.Add(leaseToLeaseMessageTM(lease));
-            return leasesListMessage;
-        }
-
         public void notifyClients()
         {
             while (true)
@@ -199,9 +191,12 @@ namespace LeaseManager
                     };
 
                     if (!paxosNode.getInstanceState(instanceToNotify).isNo_op())
-                        request.Result = leasesListToLeasesListMessageTM(paxosNode.getInstanceState(instanceToNotify).getValue());
-                    else
-                        request.Result = null;
+                    {
+                        foreach (Lease l in paxosNode.getInstanceState(instanceToNotify).getValue())
+                        {
+                            request.Result.Add(LeaseManager.leaseToLeaseMessageTM(l));
+                        }
+                    }
 
                     foreach (KeyValuePair<int, (string, TransactionManagerService.TransactionManagerServiceClient)> entry in ids_tmsServices)
                     {

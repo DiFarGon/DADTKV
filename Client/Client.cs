@@ -134,7 +134,7 @@ namespace Client
             transactionRequest.TransactionMessage = transactionMessage;
 
             //if after 15 seconds didn't receive reply from server, it tries with another one
-            CallOptions callOptions = new CallOptions(deadline: DateTime.UtcNow.AddSeconds(15));
+            CallOptions callOptions = new CallOptions(deadline: DateTime.UtcNow.AddSeconds(300));
             try
             {
                 TransactionResponse response = tmClient.Transaction(transactionRequest, callOptions);
@@ -144,7 +144,8 @@ namespace Client
                     if (di.Value == int.MinValue)
                     {
                         Console.WriteLine("DadInt" + di.Key + "with value:" + "null");
-                    } else
+                    }
+                    else
                     {
                         Console.WriteLine("DadInt" + di.Key + "with value:" + di.Value);
                     }

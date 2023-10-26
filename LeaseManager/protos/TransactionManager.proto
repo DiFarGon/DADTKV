@@ -7,7 +7,7 @@ service TransactionManagerService {
 message InstanceResultRequest {
     int32 lm_id = 1;
     int32 instance_id = 2;
-    LeasesListMessageTM result = 3;
+    repeated LeaseMessageTM result = 3;
 }
 
 message InstanceResultResponse {}
@@ -16,8 +16,4 @@ message InstanceResultResponse {}
 message LeaseMessageTM {
     string clientId = 1;
     repeated string dataKeys = 2;
-}
-
-message LeasesListMessageTM {
-    repeated LeaseMessageTM leases = 1;
 }
