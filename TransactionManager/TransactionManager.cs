@@ -96,6 +96,11 @@ namespace TransactionManager
 
         public void SetCurrentSuspicions(int currentEpoch)
         {
+            if (!this.failureSuspicions.Keys.Contains(currentEpoch))
+            {
+                this.suspected = new List<string>();
+                return;
+            }
             this.suspected = this.failureSuspicions[currentEpoch];
         }
 
