@@ -23,7 +23,6 @@ namespace TransactionManager
 
         private int crashTimeSlot = -1;
 
-
         /// <summary>
         /// Creates a new Transaction Manager with given parameters
         /// </summary>
@@ -361,7 +360,13 @@ namespace TransactionManager
             List<DadInt.DadInt> readDadInts = new List<DadInt.DadInt>();
             foreach (string key in transaction.ReadKeys)
             {
-                readDadInts.Add(this.store[key]);
+                if (this.store.ContainsKey(key))
+                {
+                    readDadInts.Add(this.store[key]);
+                } else
+                {
+                    readDadInts.Add(new DadInt.DadInt(key, int.MinValue));
+                }
             }
             this.CommunicateTransactionExecuted(transaction);
             return readDadInts;
