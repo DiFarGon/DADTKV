@@ -58,6 +58,11 @@ namespace LeaseManager
 
         public override Task<AcceptResponse> Accept(AcceptRequest request, ServerCallContext context)
         {
+            if (leaseManager.getFailureSuspicions(request.InstanceId).Contains(request.Id))
+            {
+                leaseManager.Logger($"Received Accept Request from {request.Id} for instance {request.InstanceId} but simulating that didn't receive\n");
+                return Task.FromResult(new AcceptResponse() { NotReceived = true });
+            }
             leaseManager.Logger($"Received Accept Request from {request.Id} for instance {request.InstanceId}. Value: {LeaseManager.LeasesListToString(PaxosNode.LeasesListMessageToLeasesList(request.Value))} \n");
 
             PaxosNode paxosNode = leaseManager.getPaxosNode();
@@ -79,7 +84,7 @@ namespace LeaseManager
                 instanceState.setWTS(request.BallotId);
 
                 if (request.Value == null)
-                    instanceState.setNo_op(true);
+                    instanceState.setNo_op(true); // TODO: instead set the value to the request.value since it will be the empty list if no value was written
                 else
                     instanceState.setValue(PaxosNode.LeasesListMessageToLeasesList(request.Value));
             }

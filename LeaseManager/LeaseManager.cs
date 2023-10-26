@@ -23,6 +23,8 @@ namespace LeaseManager
         private int timeSlots;
         private int timeSlotDuration;
         private int crashTimeSlot = -1;
+        private Dictionary<int, List<int>> failureSuspicions = new Dictionary<int, List<int>>(); // each index is a timeSlot and each entry is a list of suspected nodes
+        private int lastInstancePropagated = 0;
 
         private Dictionary<string, int> lmsIds_lmsClusterIds = new Dictionary<string, int>();
         private Dictionary<int, GrpcChannel> lmClusterIds_channels = new Dictionary<int, GrpcChannel>();
@@ -156,12 +158,20 @@ namespace LeaseManager
                     }
                 }
             }
-            paxosNode.setFailureSuspicions(suspicions);
+            this.failureSuspicions = suspicions;
 
             foreach (KeyValuePair<int, List<int>> entry in suspicions)
             {
                 this.Logger($"suspicions at time slot {entry.Key}: {string.Join(", ", entry.Value)}");
             }
+        }
+
+        public List<int> getFailureSuspicions(int timeSlot)
+        {
+            if (failureSuspicions.ContainsKey(timeSlot))
+                return failureSuspicions[timeSlot];
+            else
+                return new List<int>();
         }
 
         public static LeaseMessageTM leaseToLeaseMessageTM(Lease lease)
@@ -175,38 +185,40 @@ namespace LeaseManager
             return leaseMessage;
         }
 
-        public void notifyClients()
+        public void notifyClients(int lastTimeSlotRun)
         {
-            while (true)
+            while (lastInstancePropagated <= lastTimeSlotRun)
             {
-                int instanceToNotify = paxosNode.getLastNotifiedInstance() + 1;
+                int instanceToPropagate = lastInstancePropagated + 1;
 
-                if (paxosNode.getInstancesStates().ContainsKey(instanceToNotify) && paxosNode.getInstanceState(instanceToNotify).isDecided())
+                if (paxosNode.getInstancesStates().ContainsKey(instanceToPropagate) && paxosNode.getInstanceState(instanceToPropagate).isDecided())
                 {
-                    Logger($"propagating instance {instanceToNotify} result.");
+                    Logger($"propagating instance {instanceToPropagate} result.");
                     InstanceResultRequest request = new InstanceResultRequest()
                     {
                         LmId = clusterId,
-                        InstanceId = instanceToNotify,
+                        InstanceId = instanceToPropagate,
                     };
 
-                    if (!paxosNode.getInstanceState(instanceToNotify).isNo_op())
+                    if (!paxosNode.getInstanceState(instanceToPropagate).isNo_op())
                     {
-                        foreach (Lease l in paxosNode.getInstanceState(instanceToNotify).getValue())
-                        {
-                            request.Result.Add(LeaseManager.leaseToLeaseMessageTM(l));
-                        }
+                        foreach (Lease l in paxosNode.getInstanceState(instanceToPropagate).getValue())
+                            request.Result.Add(leaseToLeaseMessageTM(l));
                     }
-
+                    else // no-op
+                    {
+                        // FIXME: can we treat a no-op decided instance as a decided instance with an empty list of leases?
+                    }
                     foreach (KeyValuePair<int, (string, TransactionManagerService.TransactionManagerServiceClient)> entry in ids_tmsServices)
-                    {
                         entry.Value.Item2.InstanceResultAsync(request);
-                    }
-                    paxosNode.setLastNotifiedInstance(instanceToNotify);
+
+                    lastInstancePropagated++;
                 }
                 else
+                {
+                    this.Logger($"instance {instanceToPropagate} not decided yet.");
                     break;
-
+                }
             }
         }
 
@@ -228,32 +240,35 @@ namespace LeaseManager
 
         public void startService()
         {
-            int currentTimeSlot = 0;
-            bool executionCompleted = false;
+            int currentTimeSlot = 1;
+
             Timer timer = new Timer(state =>
             {
-                if (!executionCompleted)
+                notifyClients(currentTimeSlot - 1);
+
+                this.Logger($"current time slot: {currentTimeSlot}");
+
+                if (currentTimeSlot == crashTimeSlot)
                 {
-                    currentTimeSlot++;
-
-                    if (currentTimeSlot == crashTimeSlot)
-                        Environment.Exit(0);
-
-                    if (currentTimeSlot < timeSlots)
-                        paxosNode.runPaxosInstance();
-
-                    this.Logger($"current time slot: {currentTimeSlot}");
-
-                    notifyClients();
-
-                    if (paxosNode.getLastNotifiedInstance() == timeSlots)
-                        executionCompleted = true;
+                    this.Logger($"crashing at time slot {currentTimeSlot}");
+                    closeChannels();
+                    Environment.Exit(0);
                 }
-                else
+
+                if (currentTimeSlot <= timeSlots)
+                {
+                    this.Logger($"executing paxos instance {currentTimeSlot}");
+                    paxosNode.runPaxosInstance(currentTimeSlot, failureSuspicions.ContainsKey(currentTimeSlot) ? failureSuspicions[currentTimeSlot] : new List<int>());
+                }
+
+                if (lastInstancePropagated == timeSlots)
                 {
                     closeChannels();
                     Environment.Exit(0);
                 }
+                else
+                    currentTimeSlot++;
+
             }, null, 0, timeSlotDuration);
         }
     }

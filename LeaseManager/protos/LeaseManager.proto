@@ -40,6 +40,8 @@ message AcceptResponse {
     int32 instanceId = 2;
     bool ok = 3;
     int32 mostRecentReadTS = 4; // ok = false
+
+    bool notReceived = 5;
 }
 
 message DecidedRequest {

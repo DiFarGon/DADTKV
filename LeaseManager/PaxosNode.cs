@@ -47,7 +47,6 @@ namespace LeaseManager
     {
         private int id;
         private Dictionary<int, LeaseManagerService.LeaseManagerServiceClient> paxosClusterNodes = new Dictionary<int, LeaseManagerService.LeaseManagerServiceClient>();
-        private Dictionary<int, List<int>> failureSuspicions = new Dictionary<int, List<int>>(); // each index is a timeSlot and each entry is a list of suspected nodes
         private int currentInstance = 0;
         private int lastKnownLeader = 0;
         private int previousPriorityLeader;
@@ -81,11 +80,6 @@ namespace LeaseManager
             return lastNotifiedInstance;
         }
 
-        public void setLastNotifiedInstance(int instanceId)
-        {
-            lastNotifiedInstance = instanceId;
-        }
-
         public void setClusterNodes(Dictionary<int, GrpcChannel> channels)
         {
             foreach (KeyValuePair<int, GrpcChannel> pair in channels)
@@ -94,16 +88,9 @@ namespace LeaseManager
             }
         }
 
-        public void setFailureSuspicions(Dictionary<int, List<int>> failureSuspicions)
+        public void runPaxosInstance(int timeSlot, List<int> failureSuspicions)
         {
-            this.failureSuspicions = failureSuspicions;
-        }
-
-        public void runPaxosInstance()
-        {
-            if (leasesQueue.Count == 0)
-                return;
-            currentInstance++;
+            currentInstance = timeSlot;
             instancesStates[currentInstance] = new InstanceState();
             if (leader)
             {
@@ -183,8 +170,7 @@ namespace LeaseManager
                     if (promisesCount > paxosClusterNodes.Count / 2)
                     {
                         // here the node sending the prepares is ready to send accept msgs, it will do this for each instance that has not been decided yet
-
-                        leader = true;
+                        leader = true; // TODO: instead update current leader?
                         setLastKnownLeader(id);
                         foreach (KeyValuePair<int, InstanceState> kvp in instancesStates)
                         {
@@ -210,24 +196,28 @@ namespace LeaseManager
                 BallotId = calcBallotId(),
             };
 
-            if (instancesStates[instance].isNo_op())
-                request.Value = null;
-            else
-            {
-                List<Lease> valueToPropose = instancesStates[instance].getValue();
-                if (valueToPropose.Count == 0)
-                    valueToPropose = calcValueToPropose();
-                request.Value = leasesListToLeasesListMessage(valueToPropose);
-            }
+            // if (instancesStates[instance].isNo_op())
+            //     request.Value = null; // TODO: instead don't do anything (keep empty list) since an instance that had no written value by another leader in the past should not be written to
+            // else
+            // {
+            //     List<Lease> valueToPropose = instancesStates[instance].getValue();
+            //     if (valueToPropose.Count == 0)
+            //         valueToPropose = calcValueToPropose();
+            //     request.Value = leasesListToLeasesListMessage(valueToPropose);
+            // }
+
+            List<Lease> valueToPropose = instancesStates[instance].getValue();
+            if (instance == currentInstance)
+                valueToPropose = calcValueToPropose();
+
+            request.Value = leasesListToLeasesListMessage(valueToPropose);
 
             List<Task<AcceptResponse>> responseTasks = new List<Task<AcceptResponse>>();
-
             foreach (KeyValuePair<int, LeaseManagerService.LeaseManagerServiceClient> pair in paxosClusterNodes)
             {
                 Task<AcceptResponse> response = pair.Value.AcceptAsync(request).ResponseAsync;
                 responseTasks.Add(response);
             }
-
             await AcceptWaitForMajority(responseTasks);
         }
         private async Task AcceptWaitForMajority(List<Task<AcceptResponse>> responseTasks)
@@ -240,6 +230,9 @@ namespace LeaseManager
                 Task<AcceptResponse> finishedTask = await Task.WhenAny(responseTasks);
                 responseTasks.Remove(finishedTask);
                 AcceptResponse response = await finishedTask;
+
+                if (response.NotReceived)
+                    continue;
 
                 if (!response.Ok)
                 {
