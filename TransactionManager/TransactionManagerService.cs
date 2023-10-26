@@ -111,6 +111,9 @@ namespace TransactionManager
             return Task.FromResult(response);
         }
 
+        /// <summary>
+        /// Handles a LeaseReleased call by making sure this Transaction Manager removes the lease
+        /// </summary>
         public override Task<LeaseReleasedResponse> LeaseReleased(LeaseReleasedRequest request, ServerCallContext context)
         {
             this.transactionManager.Logger("Acknowledged releasing of lease");
@@ -122,6 +125,10 @@ namespace TransactionManager
             return Task.FromResult(response);
         }
 
+        /// <summary>
+        /// Grpc method to propose a transaction to the system. If the majority of the inquired TMs suspect
+        /// of the transaction manager who made the request then the transaction will be rejected.
+        /// </summary>
         public override Task<ProposeTransactionResponse> ProposeTransaction(ProposeTransactionRequest request, ServerCallContext context)
         {
             ProposeTransactionResponse response = new ProposeTransactionResponse { Accept = !this.transactionManager.Suspects(request.TmId) };

@@ -51,6 +51,10 @@ namespace TransactionManager
             }
         }
 
+        /// <summary>
+        /// Initializes this Transaction Manager crashTimeSlot and suspicions properties
+        /// by reading the configuration file
+        /// </summary>
         public void ConfigureStateAndSuspicions(string configFile)
         {
             Dictionary<int, List<string>> suspicions = new Dictionary<int, List<string>>();
@@ -94,6 +98,10 @@ namespace TransactionManager
             }
         }
 
+        /// <summary>
+        /// Sets the current suspicions list to the adequate list for the current epoch
+        /// </summary>
+        /// <param name="currentEpoch"></param>
         public void SetCurrentSuspicions(int currentEpoch)
         {
             if (!this.failureSuspicions.Keys.Contains(currentEpoch))
@@ -161,7 +169,7 @@ namespace TransactionManager
         /// <param name="leases"></param>
         public void SetCurrentLeases(List<Lease.Lease> leases)
         {
-            this.Logger("Setting current leases list:" + leases[0].ToString() + "\n");
+            this.Logger("Setting current leases list");
             this.currentLeases.AddRange(leases);
             this.UpdateHeldLeases();
         }
@@ -210,7 +218,7 @@ namespace TransactionManager
         /// </summary>
         private void ReleaseConflictingLeases()
         {
-
+            this.Logger("Checking if there are conflicting leases");
             foreach (Lease.Lease lease in this.heldLeases)
             {
                 if (lease.ConflictsWithAny(this.currentLeases).Count != 0)
@@ -230,7 +238,7 @@ namespace TransactionManager
         /// <param name="lease"></param>
         private void CommunicateLeaseReleased(Lease.Lease lease)
         {
-            this.Logger("Informing other Transaction Managers of lease releasing");
+            this.Logger($"Informing other Transaction Managers lease {lease.ToString()} was released");
 
             LeaseMessageTM message = lease.ToLeaseMessage();
             LeaseReleasedRequest request = new LeaseReleasedRequest();
@@ -247,7 +255,7 @@ namespace TransactionManager
         /// <param name="lease"></param>
         public void RemoveLease(Lease.Lease lease)
         {
-            this.Logger("Removing lease");
+            this.Logger($"Removing lease {lease.ToString()}");
 
             this.currentLeases.Remove(lease);
             this.UpdateHeldLeases();
@@ -272,7 +280,7 @@ namespace TransactionManager
         /// <param name="transaction"></param>
         public void StageTransaction(Transaction.Transaction transaction, TaskCompletionSource<TransactionResponse> tcs)
         {
-            this.Logger("Staging transaction");
+            this.Logger($"Staging transaction {transaction.ToString()}");
             this.pendingTransactions.Add((transaction, tcs));
         }
 
@@ -322,8 +330,6 @@ namespace TransactionManager
         /// <param name="transaction"></param>
         public void RequestLease(Transaction.Transaction transaction)
         {
-            this.Logger("Broadcasting lease request to lease managers");
-
             LeaseRequest leaseRequest = new LeaseRequest { TmId = this.Id };
 
             List<string> keysWrite = new List<string>();
@@ -335,7 +341,7 @@ namespace TransactionManager
             List<string> keys = transaction.ReadKeys.Concat(keysWrite).ToList();
             keys = keys.Distinct().ToList();
 
-            Console.WriteLine("Requested keys: " + string.Join(", ", keys));
+            this.Logger("Requesting keys: " + string.Join(", ", keys));
             foreach (string key in keys)
             {
                 leaseRequest.Keys.Add(key);
@@ -347,6 +353,11 @@ namespace TransactionManager
             }
         }
 
+        /// <summary>
+        /// Checks if this Transaction Manager suspects of Transaction Manager with id = tmId
+        /// </summary>
+        /// <param name="tmId"></param>
+        /// <returns> true if this Transaction Manager suspects of given one, false otherwise</returns>
         public bool Suspects(string tmId)
         {
             return this.suspected.Contains(tmId);
@@ -359,7 +370,7 @@ namespace TransactionManager
         /// <param name="transaction"></param>
         public void WriteTransactionToStore(Transaction.Transaction transaction)
         {
-            this.Logger("Writing transaction to store");
+            this.Logger($"Writing transaction {transaction.ToString()} to store");
 
             foreach (DadInt.DadInt dadInt in transaction.DadIntsWrite)
             {
@@ -375,7 +386,7 @@ namespace TransactionManager
         /// <returns>the list of the read DadInts</returns>
         public List<DadInt.DadInt> ExecuteTransaction(Transaction.Transaction transaction)
         {
-            this.Logger("Executing transaction");
+            this.Logger($"Executing transaction {transaction.ToString()}");
 
             List<DadInt.DadInt> readDadInts = new List<DadInt.DadInt>();
             foreach (string key in transaction.ReadKeys)
@@ -407,13 +418,14 @@ namespace TransactionManager
         /// <param name="transaction"></param>
         private bool ProposeTransaction()
         {
+            this.Logger("Proposing transaction");
             int count = 1;
             foreach (TransactionManagerService.TransactionManagerServiceClient service in TmServices.Values)
             {
                 ProposeTransactionResponse response = service.ProposeTransaction(new ProposeTransactionRequest { TmId = this.Id });
                 if (response.Accept) { count++; }
             }
-            return count > TmServices.Keys.Count() / 2 ;
+            return count > (TmServices.Keys.Count() + 1) / 2 ;
         }
 
         /// <summary>
@@ -422,7 +434,7 @@ namespace TransactionManager
         /// <param name="transaction"></param>
         public void CommunicateTransactionExecuted(Transaction.Transaction transaction)
         {
-            this.Logger("Broadcasing executed transaction to every Transaction Manager");
+            this.Logger($"Broadcasing executed transaction {transaction.ToString()} to every Transaction Manager");
 
             TransactionExecutedRequest request = new TransactionExecutedRequest();
             TransactionMessage transactionMessage = transaction.ToTransactionMessage();
@@ -444,7 +456,7 @@ namespace TransactionManager
         /// and a list with the read DadInts</returns>
         public (bool, List<DadInt.DadInt>) AttemptTransaction(Transaction.Transaction transaction)
         {
-            this.Logger("Attempting transaction");
+            this.Logger($"Attempting transaction {transaction.ToString()}");
 
             List<string> keysHeld = this.KeysHeld();
             List<string> requiredKeys = transaction.ReadKeys;
@@ -455,9 +467,6 @@ namespace TransactionManager
                     requiredKeys.Add(dadInt.Key);
                 }
             }
-
-
-            this.Logger("Keys held: " + string.Join(", ", keysHeld));
 
             bool allRequiredKeysHeld = requiredKeys.All(element => keysHeld.Contains(element));
             if (allRequiredKeysHeld)

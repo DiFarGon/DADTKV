@@ -50,5 +50,24 @@ namespace Transaction
             }
             return transactionMessage;
         }
+
+        /// <returns>A string representation of this Transaction instance</returns>
+        public override string ToString()
+        {
+            string readKeys = string.Join(", ", this.ReadKeys);
+            string writeDadInts = "";
+            for (int i = 0; i < this.DadIntsWrite.Count(); i++)
+            {
+                DadInt.DadInt di = this.DadIntsWrite.ElementAt(i);
+                if (i == this.DadIntsWrite.Count() - 1)
+                {
+                    writeDadInts += $"({di.Key}: {di.Value.ToString()})";
+                } else 
+                {
+                    writeDadInts += $"({di.Key}: {di.Value.ToString()}), ";
+                }
+            }
+            return $"[read: [{readKeys}], write: [{writeDadInts}]";
+        }
     }
 }
