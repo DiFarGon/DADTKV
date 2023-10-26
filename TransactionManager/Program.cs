@@ -37,7 +37,7 @@ namespace TransactionManager
 
             transactionManager.SetTmClusterNodes(args[4]);
             transactionManager.SetLmClusterNodes(args[3]);
-            transactionManager.configureStateAndSuspicions(args[8]);
+            transactionManager.ConfigureStateAndSuspicions(args[8]);
 
             DateTime startTime = DateTime.ParseExact(args[6], "HH:mm:ss", CultureInfo.InvariantCulture);
             DateTime currentTime = DateTime.Now;
@@ -51,7 +51,8 @@ namespace TransactionManager
             Timer timer = new Timer(async state =>
             {
                 epoch++;
-                if (epoch == int.Parse(args[7])) await server.KillAsync();
+                if (epoch == transactionManager.CrashTimeSlot) await server.KillAsync();
+                transactionManager.SetCurrentSuspicions(epoch);
             }, null, 0, int.Parse(args[5]));
 
             Console.ReadKey();

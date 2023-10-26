@@ -121,5 +121,11 @@ namespace TransactionManager
             LeaseReleasedResponse response = new LeaseReleasedResponse();
             return Task.FromResult(response);
         }
+
+        public override Task<ProposeTransactionResponse> ProposeTransaction(ProposeTransactionRequest request, ServerCallContext context)
+        {
+            ProposeTransactionResponse response = new ProposeTransactionResponse { Accept = !this.transactionManager.Suspects(request.TmId) };
+            return Task.FromResult(response);
+        }
     }
 }

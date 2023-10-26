@@ -6,6 +6,7 @@ service TransactionManagerService {
 	rpc TransactionExecuted(TransactionExecutedRequest) returns (TransactionExecutedResponse);
 	rpc LeaseReleased(LeaseReleasedRequest) returns (LeaseReleasedResponse);
 	rpc InstanceResult(InstanceResultRequest) returns (InstanceResultResponse);
+	rpc ProposeTransaction(ProposeTransactionRequest) returns (ProposeTransactionResponse);
 }
 
 message StatusRequest { }
@@ -40,6 +41,14 @@ message InstanceResultRequest {
 }
 
 message InstanceResultResponse { }
+
+message ProposeTransactionRequest {
+	string tmId = 1;
+}
+
+message ProposeTransactionResponse {
+	bool accept = 1;
+}
 
 message DadIntMessage {
 	string key = 1;

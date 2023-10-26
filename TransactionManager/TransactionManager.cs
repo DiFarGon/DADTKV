@@ -18,10 +18,9 @@ namespace TransactionManager
         private List<Lease.Lease> heldLeases = new List<Lease.Lease>();
         private List<(Transaction.Transaction, TaskCompletionSource<TransactionResponse> tcs)> pendingTransactions = new List<(Transaction.Transaction, TaskCompletionSource<TransactionResponse> tcs)>();
         private Dictionary<string, DadInt.DadInt> store = new Dictionary<string, DadInt.DadInt>();
-
-        private Dictionary<int, List<int>> failureSuspicions = new Dictionary<int, List<int>>();
-
-        private int crashTimeSlot = -1;
+        private Dictionary<int, List<string>> failureSuspicions = new Dictionary<int, List<string>>();
+        private List<string> suspected = new List<string>();
+        public int CrashTimeSlot = -1;
 
         /// <summary>
         /// Creates a new Transaction Manager with given parameters
@@ -52,9 +51,9 @@ namespace TransactionManager
             }
         }
 
-        public void configureStateAndSuspicions(string configFile)
+        public void ConfigureStateAndSuspicions(string configFile)
         {
-            Dictionary<int, List<int>> suspicions = new Dictionary<int, List<int>>();
+            Dictionary<int, List<string>> suspicions = new Dictionary<int, List<string>>();
             using StreamReader reader = new StreamReader(configFile);
             {
                 string? line;
@@ -66,7 +65,7 @@ namespace TransactionManager
                         int timeSlot = int.Parse(parts[1]);
                         int tmsStatesStartIndex = 2;
                         if (parts[tmsStatesStartIndex + clusterId] == "C")
-                            this.crashTimeSlot = timeSlot;
+                            this.CrashTimeSlot = timeSlot;
 
                         for (int i = tmsStatesStartIndex + TmServices.Count + LmServices.Count; i < parts.Length; i++)
                         {
@@ -74,12 +73,12 @@ namespace TransactionManager
                             if (sus[0] == Id)
                             {
                                 if (suspicions.ContainsKey(timeSlot))
-                                    suspicions[timeSlot].Add(tmsIds_tmsClusterIds[sus[1]]);
+                                    suspicions[timeSlot].Add(sus[1]);
                                 else
                                 {
-                                    suspicions[timeSlot] = new List<int>
+                                    suspicions[timeSlot] = new List<string>
                                         {
-                                            tmsIds_tmsClusterIds[sus[1]]
+                                            sus[1]
                                         };
                                 }
                             }
@@ -89,10 +88,15 @@ namespace TransactionManager
             }
             this.failureSuspicions = suspicions;
 
-            foreach (KeyValuePair<int, List<int>> entry in suspicions)
+            foreach (KeyValuePair<int, List<string>> entry in suspicions)
             {
                 this.Logger($"suspicions at time slot {entry.Key}: {string.Join(", ", entry.Value)}");
             }
+        }
+
+        public void SetCurrentSuspicions(int currentEpoch)
+        {
+            this.suspected = this.failureSuspicions[currentEpoch];
         }
 
         /// <summary>
@@ -338,6 +342,11 @@ namespace TransactionManager
             }
         }
 
+        public bool Suspects(string tmId)
+        {
+            return this.suspected.Contains(tmId);
+        }
+
         /// <summary>
         /// Writes the changes to be made by this transaction to this Transaction
         /// Manager store
@@ -375,9 +384,31 @@ namespace TransactionManager
                     readDadInts.Add(new DadInt.DadInt(key, int.MinValue));
                 }
             }
-            this.WriteTransactionToStore(transaction);
-            this.CommunicateTransactionExecuted(transaction);
-            return readDadInts;
+            if (this.ProposeTransaction())
+            {
+                this.WriteTransactionToStore(transaction);
+                this.CommunicateTransactionExecuted(transaction);
+                return readDadInts;
+            }
+            List<DadInt.DadInt> returnList = new List<DadInt.DadInt>();
+            DadInt.DadInt abortDadInt = new DadInt.DadInt("abort", 0);
+            returnList.Add(abortDadInt);
+            return returnList;
+        }
+
+        /// <summary>
+        /// Propose this transaction to other Transaction Managers
+        /// </summary>
+        /// <param name="transaction"></param>
+        private bool ProposeTransaction()
+        {
+            int count = 1;
+            foreach (TransactionManagerService.TransactionManagerServiceClient service in TmServices.Values)
+            {
+                ProposeTransactionResponse response = service.ProposeTransaction(new ProposeTransactionRequest { TmId = this.Id });
+                if (response.Accept) { count++; }
+            }
+            return count > TmServices.Keys.Count() / 2 ;
         }
 
         /// <summary>
