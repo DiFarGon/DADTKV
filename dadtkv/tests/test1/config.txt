@@ -1,5 +1,7 @@
 P TM1 T http://localhost:10000
 P LM1 L http://localhost:10004
+P LM2 L http://localhost:10002
+P LM3 L http://localhost:10001
 #
 P C1 C tests/test1/client/client-script-1.txt
 #
@@ -8,3 +10,10 @@ S 100
 T 00:15:15
 #
 D 10000
+#
+1 N N N N 
+2 N N N N 
+3 N N N N (LM2, LM1)
+4 N N N N (LM2, LM1)
+5 N N N N (LM2, LM1)
+6 N N N N (LM2, LM1)

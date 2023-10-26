@@ -22,13 +22,13 @@ namespace LeaseManager
         public int getWTS() { return writeTS; }
         public List<Lease> getValue() { return value; }
         public bool isDecided() { return decided; }
-        public bool isNo_op() { return no_op; }
+        public bool isNoOp() { return no_op; }
 
         public void setRTS(int readTS) { this.readTS = readTS; }
         public void setWTS(int writeTS) { this.writeTS = writeTS; }
         public void setValue(List<Lease> value) { this.value = value; }
         public void setDecided(bool decided) { this.decided = decided; }
-        public void setNo_op(bool no_op) { this.no_op = no_op; }
+        public void setNoOp(bool no_op) { this.no_op = no_op; }
 
         public bool containsLease(Lease lease)
         {
@@ -57,10 +57,9 @@ namespace LeaseManager
         private int mostRecentReadTS = 0;
 
         private ConcurrentDictionary<int, InstanceState> instancesStates = new ConcurrentDictionary<int, InstanceState>();
-        private int lastNotifiedInstance = 0;
 
         private List<Lease> leasesQueue = new List<Lease>(); // leases that have not been handled yet, key is the lease and value is the number of times it has been requested
-
+        private Dictionary<int, List<int>> failureSuspicions = new Dictionary<int, List<int>>();
 
         public PaxosNode(int id)
         {
@@ -75,11 +74,6 @@ namespace LeaseManager
                 previousPriorityLeader = id - 1;
         }
 
-        public int getLastNotifiedInstance()
-        {
-            return lastNotifiedInstance;
-        }
-
         public void setClusterNodes(Dictionary<int, GrpcChannel> channels)
         {
             foreach (KeyValuePair<int, GrpcChannel> pair in channels)
@@ -88,10 +82,16 @@ namespace LeaseManager
             }
         }
 
-        public void runPaxosInstance(int timeSlot, List<int> failureSuspicions)
+        public void runPaxosInstance(int timeSlot)
         {
             currentInstance = timeSlot;
             instancesStates[currentInstance] = new InstanceState();
+            if (leasesQueue.Count == 0)
+            {
+                instancesStates[currentInstance].setNoOp(true);
+                return;
+            }
+
             if (leader)
             {
                 broadcastAccept(currentInstance);
@@ -100,12 +100,12 @@ namespace LeaseManager
             {
                 if (isLeaderCandidate())
                 {
-                    broadcastPrepare();
+                    broadcastPrepare(currentInstance);
                 }
             }
         }
 
-        public async void broadcastPrepare()
+        public async void broadcastPrepare(int instance)
         {
             setRoundId(roundId + 1);
             int ballotId = calcBallotId();
@@ -127,32 +127,32 @@ namespace LeaseManager
             List<Task<PrepareResponse>> responseTasks = new List<Task<PrepareResponse>>();
             foreach (KeyValuePair<int, LeaseManagerService.LeaseManagerServiceClient> pair in paxosClusterNodes)
             {
-                Task<PrepareResponse> response = pair.Value.PrepareAsync(request).ResponseAsync;
-                responseTasks.Add(response);
+                if (!failureSuspicions.ContainsKey(instance) || (failureSuspicions.ContainsKey(instance) && !failureSuspicions[instance].Contains(pair.Key)))
+                {
+                    Task<PrepareResponse> response = pair.Value.PrepareAsync(request).ResponseAsync;
+                    responseTasks.Add(response);
+                }
             }
 
             await PrepareWaitForMajority(responseTasks);
         }
         private async Task PrepareWaitForMajority(List<Task<PrepareResponse>> responseTasks)
         {
-            int nacksCount = 0;
             int promisesCount = 0;
 
-            while (true)
+            while (responseTasks.Count > 0)
             {
                 Task<PrepareResponse> finishedTask = await Task.WhenAny(responseTasks);
                 responseTasks.Remove(finishedTask);
                 PrepareResponse response = await finishedTask;
 
+                if (response.NotReceived)
+                    continue;
+
                 if (!response.Ok)
                 {
-                    nacksCount++;
                     setRoundId(Math.Max(roundId, (response.MostRecentReadTS - response.MostRecentReadTS % getClusterSize()) / getClusterSize()));
-                    if (nacksCount > paxosClusterNodes.Count / 2)
-                    {
-                        setLeader(false);
-                        break;
-                    }
+                    break;
                 }
                 else
                 {
@@ -175,11 +175,7 @@ namespace LeaseManager
                         foreach (KeyValuePair<int, InstanceState> kvp in instancesStates)
                         {
                             if (!kvp.Value.isDecided())
-                            {
-                                if (kvp.Value.getValue() == null && kvp.Key < currentInstance)
-                                    kvp.Value.setNo_op(true);
                                 broadcastAccept(kvp.Key);
-                            }
                         }
                         break;
                     }
@@ -196,16 +192,6 @@ namespace LeaseManager
                 BallotId = calcBallotId(),
             };
 
-            // if (instancesStates[instance].isNo_op())
-            //     request.Value = null; // TODO: instead don't do anything (keep empty list) since an instance that had no written value by another leader in the past should not be written to
-            // else
-            // {
-            //     List<Lease> valueToPropose = instancesStates[instance].getValue();
-            //     if (valueToPropose.Count == 0)
-            //         valueToPropose = calcValueToPropose();
-            //     request.Value = leasesListToLeasesListMessage(valueToPropose);
-            // }
-
             List<Lease> valueToPropose = instancesStates[instance].getValue();
             if (instance == currentInstance)
                 valueToPropose = calcValueToPropose();
@@ -213,19 +199,24 @@ namespace LeaseManager
             request.Value = leasesListToLeasesListMessage(valueToPropose);
 
             List<Task<AcceptResponse>> responseTasks = new List<Task<AcceptResponse>>();
+            Console.WriteLine($"paxosClusterNodes.Count: {paxosClusterNodes.Count}");
             foreach (KeyValuePair<int, LeaseManagerService.LeaseManagerServiceClient> pair in paxosClusterNodes)
             {
-                Task<AcceptResponse> response = pair.Value.AcceptAsync(request).ResponseAsync;
-                responseTasks.Add(response);
+                Console.WriteLine($"failure suspicions: {failureSuspicions}");
+                if (!failureSuspicions.ContainsKey(instance) || (failureSuspicions.ContainsKey(instance) && !failureSuspicions[instance].Contains(pair.Key)))
+                {
+                    Console.WriteLine($"sending accept to {pair.Key}");
+                    Task<AcceptResponse> response = pair.Value.AcceptAsync(request).ResponseAsync;
+                    responseTasks.Add(response);
+                }
             }
             await AcceptWaitForMajority(responseTasks);
         }
         private async Task AcceptWaitForMajority(List<Task<AcceptResponse>> responseTasks)
         {
-            int nacksCount = 0;
             int acceptsCount = 0;
 
-            while (true)
+            while (responseTasks.Count > 0)
             {
                 Task<AcceptResponse> finishedTask = await Task.WhenAny(responseTasks);
                 responseTasks.Remove(finishedTask);
@@ -236,15 +227,9 @@ namespace LeaseManager
 
                 if (!response.Ok)
                 {
-                    nacksCount++;
                     setRoundId(Math.Max(roundId, (response.MostRecentReadTS - response.MostRecentReadTS % getClusterSize()) / getClusterSize()));
-
-                    // here the node sending these accepts should stop being a leader because it has seen that a node with a higher ballotId (has priority) is playing the proposer role
-                    if (nacksCount > paxosClusterNodes.Count / 2)
-                    {
-                        leader = false;
-                        break;
-                    }
+                    leader = false;
+                    break;
                 }
                 else
                 {
@@ -271,7 +256,10 @@ namespace LeaseManager
 
             foreach (KeyValuePair<int, LeaseManagerService.LeaseManagerServiceClient> pair in paxosClusterNodes)
             {
-                pair.Value.Decided(request);
+                if (!failureSuspicions.ContainsKey(instance) || (failureSuspicions.ContainsKey(instance) && !failureSuspicions[instance].Contains(pair.Key)))
+                {
+                    pair.Value.Decided(request);
+                }
             }
         }
 
@@ -298,6 +286,11 @@ namespace LeaseManager
             return valueToPropose;
         }
 
+        public void setFailureSuspicions(Dictionary<int, List<int>> failureSuspicions)
+        {
+            this.failureSuspicions = failureSuspicions;
+        }
+
         public int getId()
         {
             return id;
@@ -305,7 +298,9 @@ namespace LeaseManager
 
         private bool isLeaderCandidate()
         {
-            return lastKnownLeader == previousPriorityLeader && failureSuspicions[currentInstance].Contains(previousPriorityLeader);
+            return lastKnownLeader == previousPriorityLeader
+                && failureSuspicions.ContainsKey(currentInstance)
+                && failureSuspicions[currentInstance].Contains(previousPriorityLeader);
         }
 
         public bool isLeader()
@@ -424,6 +419,16 @@ namespace LeaseManager
                 Decided = instanceState.isDecided(),
             };
             return instanceStateMessage;
+        }
+
+        public List<int> getFailureSuspicions(int instanceId)
+        {
+            return failureSuspicions[instanceId];
+        }
+
+        public Dictionary<int, List<int>> getFailureSuspicions()
+        {
+            return failureSuspicions;
         }
     }
 }

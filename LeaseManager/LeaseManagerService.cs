@@ -33,6 +33,12 @@ namespace LeaseManager
 
             PaxosNode paxosNode = leaseManager.getPaxosNode();
 
+            if (paxosNode.getFailureSuspicions().ContainsKey(request.InstanceId) && paxosNode.getFailureSuspicions(request.InstanceId).Contains(request.Id))
+            {
+                leaseManager.Logger($"Received Accept Request from {request.Id} for instance {request.InstanceId} but simulating that didn't receive\n");
+                return Task.FromResult(new PrepareResponse() { NotReceived = true });
+            }
+
             if (request.BallotId > paxosNode.getMostRecentReadTS())
             {
                 response.Ok = true;
@@ -44,6 +50,7 @@ namespace LeaseManager
 
                 paxosNode.setMostRecentReadTS(request.BallotId);
                 paxosNode.setRoundId((request.BallotId - request.Id) / paxosNode.getClusterSize());
+                paxosNode.setLastKnownLeader(request.Id);
 
                 if (paxosNode.isLeader())
                     paxosNode.setLeader(false);
@@ -58,14 +65,16 @@ namespace LeaseManager
 
         public override Task<AcceptResponse> Accept(AcceptRequest request, ServerCallContext context)
         {
-            if (leaseManager.getFailureSuspicions(request.InstanceId).Contains(request.Id))
+            leaseManager.Logger($"Received Accept Request from {request.Id} for instance {request.InstanceId}. Value: {LeaseManager.LeasesListToString(PaxosNode.LeasesListMessageToLeasesList(request.Value))} \n");
+
+            PaxosNode paxosNode = leaseManager.getPaxosNode();
+
+            if (paxosNode.getFailureSuspicions().ContainsKey(request.InstanceId) && paxosNode.getFailureSuspicions(request.InstanceId).Contains(request.Id))
             {
                 leaseManager.Logger($"Received Accept Request from {request.Id} for instance {request.InstanceId} but simulating that didn't receive\n");
                 return Task.FromResult(new AcceptResponse() { NotReceived = true });
             }
-            leaseManager.Logger($"Received Accept Request from {request.Id} for instance {request.InstanceId}. Value: {LeaseManager.LeasesListToString(PaxosNode.LeasesListMessageToLeasesList(request.Value))} \n");
 
-            PaxosNode paxosNode = leaseManager.getPaxosNode();
             InstanceState instanceState = paxosNode.getInstanceState(request.InstanceId);
 
             AcceptResponse response = new AcceptResponse()
@@ -82,11 +91,8 @@ namespace LeaseManager
             {
                 response.Ok = true;
                 instanceState.setWTS(request.BallotId);
-
-                if (request.Value == null)
-                    instanceState.setNo_op(true); // TODO: instead set the value to the request.value since it will be the empty list if no value was written
-                else
-                    instanceState.setValue(PaxosNode.LeasesListMessageToLeasesList(request.Value));
+                instanceState.setValue(PaxosNode.LeasesListMessageToLeasesList(request.Value));
+                instanceState.setNoOp(false);
             }
             else
             {
@@ -103,6 +109,13 @@ namespace LeaseManager
             DecidedResponse response = new DecidedResponse();
 
             PaxosNode paxosNode = leaseManager.getPaxosNode();
+
+            if (paxosNode.getFailureSuspicions().ContainsKey(request.InstanceId) && paxosNode.getFailureSuspicions(request.InstanceId).Contains(request.Id))
+            {
+                leaseManager.Logger($"Received Decided Request from {request.Id} for instance {request.InstanceId} but simulating that didn't receive\n");
+                return Task.FromResult(new DecidedResponse() { NotReceived = true });
+            }
+
             InstanceState instanceState = paxosNode.getInstanceState(request.InstanceId);
             instanceState.setDecided(true);
 
@@ -110,7 +123,7 @@ namespace LeaseManager
 
             foreach (KeyValuePair<int, InstanceState> kvp in paxosNode.getInstancesStates())
             {
-                Console.WriteLine($"instance {kvp.Key}: < {kvp.Value.getRTS()}, {kvp.Value.getWTS()}, {LeaseManager.LeasesListToString(kvp.Value.getValue())}> decided: {kvp.Value.isDecided()}, no_op: {kvp.Value.isNo_op()} \n");
+                Console.WriteLine($"instance {kvp.Key}: < {kvp.Value.getRTS()}, {kvp.Value.getWTS()}, {LeaseManager.LeasesListToString(kvp.Value.getValue())}> decided: {kvp.Value.isDecided()}\n");
             }
 
             return Task.FromResult(response);

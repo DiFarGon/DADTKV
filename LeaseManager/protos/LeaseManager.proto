@@ -17,6 +17,7 @@ message LeaseResponse { }
 
 message PrepareRequest {
     int32 id = 1;
+    int32 instanceId = 4;
     int32 ballotId = 2;
     repeated int32 unresolvedInstances = 3;    
 }
@@ -26,6 +27,9 @@ message PrepareResponse {
     bool ok = 2;
     int32 mostRecentReadTS = 3; // ok = false
     map<int32, InstanceStateMessage> instancesStates = 4; // used by a node trying to become a leader to know what to do with unresolved past instances 
+
+    bool notReceived = 5;
+
 }
 
 message AcceptRequest {
@@ -56,6 +60,8 @@ message DecidedResponse {
     int32 instanceId = 2;
     int32 ballotId = 3;
     bool ok = 4;
+
+    bool NotReceived = 5;
 }
 
 
