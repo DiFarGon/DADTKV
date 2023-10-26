@@ -459,7 +459,7 @@ namespace TransactionManager
             this.Logger($"Attempting transaction {transaction.ToString()}");
 
             List<string> keysHeld = this.KeysHeld();
-            List<string> requiredKeys = transaction.ReadKeys;
+            List<string> requiredKeys = transaction.ReadKeys.ToList();
             foreach (DadInt.DadInt dadInt in transaction.DadIntsWrite)
             {
                 if (!requiredKeys.Contains(dadInt.Key))
