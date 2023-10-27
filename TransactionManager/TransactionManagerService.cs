@@ -26,7 +26,7 @@ namespace TransactionManager
         /// <returns></returns>
         public async override Task<TransactionResponse> Transaction(TransactionRequest transactionRequest, ServerCallContext context)
         {
-            this.transactionManager.Logger("Received Transaction Request: " + transactionRequest.TransactionMessage.KeysRead + "\n");
+            this.transactionManager.Debug("Received Transaction Request: " + transactionRequest.TransactionMessage.KeysRead + "\n");
 
             TaskCompletionSource<TransactionResponse> tcs = new TaskCompletionSource<TransactionResponse>();
 
@@ -67,7 +67,7 @@ namespace TransactionManager
         /// <returns></returns>
         public override Task<StatusResponse> Status(StatusRequest statusRequest, ServerCallContext context)
         {
-            transactionManager.Logger("I'm Alive");
+            this.transactionManager.Status();
 
             var reply = new StatusResponse();
             return Task.FromResult(reply);
@@ -87,8 +87,8 @@ namespace TransactionManager
             if (this.lastInstance >= request.InstanceId) { return Task.FromResult(response); }
 
             this.lastInstance = request.InstanceId;
-            
-            this.transactionManager.Logger($"Acnkowledged consensus on instance {request.InstanceId}.");
+
+            this.transactionManager.Debug($"Acnkowledged consensus on instance {request.InstanceId}.");
 
             List<Lease.Lease> leases = new List<Lease.Lease>();
             request.Result.ToList().ForEach(lease =>
@@ -108,7 +108,7 @@ namespace TransactionManager
         /// <returns></returns>
         public override Task<TransactionExecutedResponse> TransactionExecuted(TransactionExecutedRequest request, ServerCallContext context)
         {
-            this.transactionManager.Logger("Acknowledged execution of transaction");
+            this.transactionManager.Debug("Acknowledged execution of transaction");
 
             Transaction.Transaction transaction = new Transaction.Transaction(request.TransactionMessage);
             this.transactionManager.WriteTransactionToStore(transaction);
@@ -121,7 +121,7 @@ namespace TransactionManager
         /// </summary>
         public override Task<LeaseReleasedResponse> LeaseReleased(LeaseReleasedRequest request, ServerCallContext context)
         {
-            this.transactionManager.Logger("Acknowledged releasing of lease");
+            this.transactionManager.Debug("Acknowledged releasing of lease");
 
             Lease.Lease lease = new Lease.Lease(request.LeaseMessage);
             this.transactionManager.RemoveLease(lease);
