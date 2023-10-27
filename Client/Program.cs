@@ -38,6 +38,11 @@ namespace Client
             string[] script = File.ReadAllLines(args[4]);
             foreach (string line in script)
             {
+                if (string.IsNullOrEmpty(line))
+                {
+                    continue; // Skip empty lines
+                }
+
                 switch (line[0])
                 {
                     case '#':

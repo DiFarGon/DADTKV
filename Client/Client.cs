@@ -143,11 +143,11 @@ namespace Client
                 {
                     if (di.Value == int.MinValue)
                     {
-                        Console.WriteLine("DadInt" + di.Key + "with value:" + "null");
+                        Console.WriteLine("DadInt " + di.Key + " with value: " + "null");
                     }
                     else
                     {
-                        Console.WriteLine("DadInt" + di.Key + "with value:" + di.Value);
+                        Console.WriteLine("DadInt " + di.Key + " with value: " + di.Value);
                     }
                 }
             }
