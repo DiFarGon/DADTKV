@@ -53,7 +53,10 @@ namespace TransactionManager
                 epoch++;
                 if (epoch == transactionManager.CrashTimeSlot) await server.KillAsync();
                 transactionManager.SetCurrentSuspicions(epoch);
-            }, null, 0, int.Parse(args[5]));
+            }, null, 0, int.Parse(args[7]));
+
+            if (epoch == int.Parse(args[5]))
+                timer.Dispose();
 
             Console.ReadKey();
         }
