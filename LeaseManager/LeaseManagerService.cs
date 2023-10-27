@@ -66,6 +66,7 @@ namespace LeaseManager
 
         public override Task<AcceptResponse> Accept(AcceptRequest request, ServerCallContext context)
         {
+            leaseManager.Logger($"Received Accept Request from {request.Id} for instance {request.InstanceId}\n");
             PaxosNode paxosNode = leaseManager.getPaxosNode();
 
             if (paxosNode.getFailureSuspicions().ContainsKey(request.InstanceId))
@@ -78,6 +79,9 @@ namespace LeaseManager
                 leaseManager.Logger($"Received Accept Request from {request.Id} for instance {request.InstanceId} but simulating that didn't receive\n");
                 return Task.FromResult(new AcceptResponse() { NotReceived = true });
             }
+
+            if (!paxosNode.getInstancesStates().ContainsKey(request.InstanceId))
+                paxosNode.addNewInstanceState(request.InstanceId);
 
             InstanceState instanceState = paxosNode.getInstanceState(request.InstanceId);
 
@@ -94,7 +98,6 @@ namespace LeaseManager
                 paxosNode.setLastKnownLeader(request.Id);
                 if (paxosNode.isLeader())
                     paxosNode.setLeader(false);
-
             }
 
             if (request.BallotId >= instanceState.getRTS())
@@ -128,7 +131,6 @@ namespace LeaseManager
                 paxosNode.setLastKnownLeader(request.Id);
                 if (paxosNode.isLeader())
                     paxosNode.setLeader(false);
-
             }
 
             if (paxosNode.getFailureSuspicions().ContainsKey(request.InstanceId) && paxosNode.getFailureSuspicions(request.InstanceId).Contains(request.Id))
@@ -138,7 +140,12 @@ namespace LeaseManager
             }
 
             InstanceState instanceState = paxosNode.getInstanceState(request.InstanceId);
+            instanceState.setWTS(request.BallotId);
+            instanceState.setValue(PaxosNode.LeasesListMessageToLeasesList(request.Value));
             instanceState.setDecided(true);
+
+            Console.WriteLine($"Instance state (copy?) {LeaseManager.LeasesListToString(instanceState.getValue())}\n");
+            Console.WriteLine($"Instance state (kept in paxos node) {LeaseManager.LeasesListToString(paxosNode.getInstanceState(request.InstanceId).getValue())}\n");
 
             paxosNode.updateLeasesQueue(PaxosNode.LeasesListMessageToLeasesList(request.Value));
 

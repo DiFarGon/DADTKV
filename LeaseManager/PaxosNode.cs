@@ -86,10 +86,11 @@ namespace LeaseManager
         public void runPaxosInstance(int timeSlot)
         {
             currentInstance = timeSlot;
-            addNewInstanceState(timeSlot);
+            addNewInstanceState(currentInstance);
             if (leader)
             {
                 broadcastAccept(currentInstance);
+                Console.WriteLine($"node {id} is leader for instance {currentInstance} finished sending accepts");
             }
             else
             {
@@ -100,9 +101,10 @@ namespace LeaseManager
                     broadcastPrepare(currentInstance);
                 }
             }
+            Console.WriteLine($"node {id} is leader for instance {currentInstance} returning from run paxos instance");
         }
 
-        private void addNewInstanceState(int currentInstance)
+        public void addNewInstanceState(int currentInstance)
         {
             instancesStates[currentInstance] = new InstanceState();
             instancesStates[currentInstance].setRTS(mostRecentReadTS);
@@ -158,7 +160,7 @@ namespace LeaseManager
                     if (!response.Ok)
                     {
                         setRoundId(Math.Max(roundId, (response.MostRecentReadTS - response.MostRecentReadTS % getClusterSize()) / getClusterSize()));
-                        break;
+                        return;
                     }
                     else
                     {
@@ -197,13 +199,13 @@ namespace LeaseManager
                                 if (!kvp.Value.isDecided())
                                     broadcastAccept(kvp.Key);
                             }
-                            break;
+                            return;
                         }
                     }
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"Terminate execution and try again! \nException while awaiting the prepare responses: {ex.Message}.\n");
+                    Console.WriteLine($"Exception while awaiting the prepare responses: {ex.Message}.\n");
                     continue;
                 }
             }
@@ -238,6 +240,7 @@ namespace LeaseManager
                 }
             }
             await AcceptWaitForMajority(responseTasks);
+            Console.WriteLine($"exited accept wait for majority for instance {instance} and going to exit broadcast accept for instance {instance}");
         }
         private async Task AcceptWaitForMajority(List<Task<AcceptResponse>> responseTasks)
         {
@@ -250,6 +253,8 @@ namespace LeaseManager
                     Task<AcceptResponse> finishedTask = await Task.WhenAny(responseTasks);
                     responseTasks.Remove(finishedTask);
                     AcceptResponse response = await finishedTask;
+
+                    Console.WriteLine($"received accept response from {response.Id} for instance {response.InstanceId}, acked: {response.Ok}");
 
                     if (response.NotReceived)
                         continue;
@@ -266,14 +271,14 @@ namespace LeaseManager
                         if (acceptsCount > paxosClusterNodes.Count / 2)
                         {
                             broadcastDecided(response.InstanceId);
+                            Console.WriteLine($"exited broadcast decided for instance {response.InstanceId}");
                             break;
                         }
                     }
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"Exception while awaiting the accept responses: {ex.Message} \nThis is an error related with grpc (not the implemented protocol).\n");
-                    setLeader(false);
+                    Console.WriteLine($"Exception while awaiting the accept responses: {ex.Message}\n");
                     continue;
                 }
             }
@@ -297,6 +302,7 @@ namespace LeaseManager
                     pair.Value.DecidedAsync(request);
                 }
             }
+            return;
         }
 
         private List<Lease> calcValueToPropose()
