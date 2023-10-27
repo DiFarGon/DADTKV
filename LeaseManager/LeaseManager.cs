@@ -138,6 +138,7 @@ namespace LeaseManager
                         for (int i = lmsStatesStartIndex + lmClusterIds_channels.Count; i < parts.Length; i++)
                         {
                             string[] sus = parts[i].Trim('(', ')').Split(',');
+                            Console.WriteLine($"instance {timeSlot}: sus[0]: {sus[0]}, sus[1]: {sus[1]}");
                             if (sus[0] == id)
                             {
                                 if (suspicions.ContainsKey(timeSlot))
@@ -146,7 +147,6 @@ namespace LeaseManager
                                 }
                                 else
                                 {
-                                    Console.WriteLine($"sus[1]: {sus[1]}");
                                     suspicions[timeSlot] = new List<int>
                                         {
                                             lmsIds_lmsClusterIds[sus[1]]
@@ -180,13 +180,11 @@ namespace LeaseManager
         {
             while (lastHandledInstance <= lastTimeSlotRun)
             {
-                Console.WriteLine($"lastHandledInstance: {lastHandledInstance}");
-                Console.WriteLine($"lastTimeSlotRun: {lastTimeSlotRun}");
                 int instanceToPropagate = lastHandledInstance + 1;
 
                 if (paxosNode.getInstancesStates().ContainsKey(instanceToPropagate))
                 {
-                    if (paxosNode.getInstanceState(instanceToPropagate).isNoOp())
+                    if (paxosNode.getInstanceState(instanceToPropagate).isNoOp()) // FIXME:
                     {
                         Logger($"Instance {instanceToPropagate} resulted in a no-op, not propagating this.");
                         lastHandledInstance++;

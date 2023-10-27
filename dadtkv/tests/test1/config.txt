@@ -7,13 +7,13 @@ P C1 C tests/test1/client/client-script-1.txt
 #
 S 100
 #
-T 00:15:15
+T 13:47:30
 #
 D 10000
 #
-1 N N N N 
-2 N N N N 
-3 N N N N (LM2, LM1)
-4 N N N N (LM2, LM1)
-5 N N N N (LM2, LM1)
-6 N N N N (LM2, LM1)
+F 1 N N N N 
+F 2 N N N N (LM2,LM1)
+F 3 N N N N (LM2,LM1)
+F 4 N N N N 
+F 5 N N N N 
+F 6 N N N N 
