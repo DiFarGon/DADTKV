@@ -23,6 +23,7 @@ namespace LeaseManager
         private int timeSlots;
         private int timeSlotDuration;
         private int crashTimeSlot = -1;
+        private int lastHandledInstance = 0;
 
         private Dictionary<string, int> lmsIds_lmsClusterIds = new Dictionary<string, int>();
         private Dictionary<int, GrpcChannel> lmClusterIds_channels = new Dictionary<int, GrpcChannel>();
@@ -137,6 +138,7 @@ namespace LeaseManager
                         for (int i = lmsStatesStartIndex + lmClusterIds_channels.Count; i < parts.Length; i++)
                         {
                             string[] sus = parts[i].Trim('(', ')').Split(',');
+                            Console.WriteLine($"instance {timeSlot}: sus[0]: {sus[0]}, sus[1]: {sus[1]}");
                             if (sus[0] == id)
                             {
                                 if (suspicions.ContainsKey(timeSlot))
@@ -145,7 +147,6 @@ namespace LeaseManager
                                 }
                                 else
                                 {
-                                    Console.WriteLine($"sus[1]: {sus[1]}");
                                     suspicions[timeSlot] = new List<int>
                                         {
                                             lmsIds_lmsClusterIds[sus[1]]
@@ -175,38 +176,45 @@ namespace LeaseManager
             return leaseMessage;
         }
 
-        public void notifyClients()
+        public void notifyClients(int lastTimeSlotRun)
         {
-            while (true)
+            while (lastHandledInstance <= lastTimeSlotRun)
             {
-                int instanceToNotify = paxosNode.getLastNotifiedInstance() + 1;
+                int instanceToPropagate = lastHandledInstance + 1;
 
-                if (paxosNode.getInstancesStates().ContainsKey(instanceToNotify) && paxosNode.getInstanceState(instanceToNotify).isDecided())
+                if (paxosNode.getInstancesStates().ContainsKey(instanceToPropagate))
                 {
-                    Logger($"propagating instance {instanceToNotify} result.");
-                    InstanceResultRequest request = new InstanceResultRequest()
+                    if (paxosNode.getInstanceState(instanceToPropagate).isNoOp()) // FIXME:
                     {
-                        LmId = clusterId,
-                        InstanceId = instanceToNotify,
-                    };
+                        Logger($"Instance {instanceToPropagate} resulted in a no-op, not propagating this.");
+                        lastHandledInstance++;
+                        continue;
+                    }
 
-                    if (!paxosNode.getInstanceState(instanceToNotify).isNo_op())
+                    if (paxosNode.getInstanceState(instanceToPropagate).isDecided())
                     {
-                        foreach (Lease l in paxosNode.getInstanceState(instanceToNotify).getValue())
+                        Logger($"propagating instance {instanceToPropagate} result.");
+                        InstanceResultRequest request = new InstanceResultRequest()
                         {
-                            request.Result.Add(LeaseManager.leaseToLeaseMessageTM(l));
-                        }
-                    }
+                            LmId = clusterId,
+                            InstanceId = instanceToPropagate,
+                        };
+                        foreach (Lease l in paxosNode.getInstanceState(instanceToPropagate).getValue())
+                            request.Result.Add(leaseToLeaseMessageTM(l));
 
-                    foreach (KeyValuePair<int, (string, TransactionManagerService.TransactionManagerServiceClient)> entry in ids_tmsServices)
-                    {
-                        entry.Value.Item2.InstanceResultAsync(request);
+                        foreach (KeyValuePair<int, (string, TransactionManagerService.TransactionManagerServiceClient)> entry in ids_tmsServices)
+                            entry.Value.Item2.InstanceResultAsync(request);
+
+                        lastHandledInstance++;
                     }
-                    paxosNode.setLastNotifiedInstance(instanceToNotify);
+                    else
+                    {
+                        this.Logger($"instance {instanceToPropagate} not decided yet.");
+                        break;
+                    }
                 }
                 else
                     break;
-
             }
         }
 
@@ -228,32 +236,34 @@ namespace LeaseManager
 
         public void startService()
         {
-            int currentTimeSlot = 0;
-            bool executionCompleted = false;
+            int currentTimeSlot = 1;
+
             Timer timer = new Timer(state =>
             {
-                if (!executionCompleted)
+                if (currentTimeSlot > 1)
+                    notifyClients(currentTimeSlot - 1);
+
+                if (currentTimeSlot == crashTimeSlot)
                 {
-                    currentTimeSlot++;
-
-                    if (currentTimeSlot == crashTimeSlot)
-                        Environment.Exit(0);
-
-                    if (currentTimeSlot < timeSlots)
-                        paxosNode.runPaxosInstance();
-
-                    this.Logger($"current time slot: {currentTimeSlot}");
-
-                    notifyClients();
-
-                    if (paxosNode.getLastNotifiedInstance() == timeSlots)
-                        executionCompleted = true;
+                    this.Logger($"crashing at time slot {currentTimeSlot}");
+                    closeChannels();
+                    Environment.Exit(0);
                 }
-                else
+
+                if (currentTimeSlot <= timeSlots)
+                {
+                    this.Logger($"executing paxos instance {currentTimeSlot}");
+                    paxosNode.runPaxosInstance(currentTimeSlot);
+                }
+
+                if (lastHandledInstance == timeSlots)
                 {
                     closeChannels();
                     Environment.Exit(0);
                 }
+                else
+                    currentTimeSlot++;
+
             }, null, 0, timeSlotDuration);
         }
     }
