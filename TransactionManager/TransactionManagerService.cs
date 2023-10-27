@@ -4,6 +4,7 @@ namespace TransactionManager
 {
     class TransactionManagerServiceImpl : TransactionManagerService.TransactionManagerServiceBase
     {
+        private int lastInstance = 0;
         TransactionManager transactionManager;
 
         /// <summary>
@@ -82,6 +83,11 @@ namespace TransactionManager
         /// <returns></returns>
         public override Task<InstanceResultResponse> InstanceResult(InstanceResultRequest request, ServerCallContext context)
         {
+            InstanceResultResponse response = new InstanceResultResponse();
+            if (this.lastInstance >= request.InstanceId) { return Task.FromResult(response); }
+
+            this.lastInstance = request.InstanceId;
+            
             this.transactionManager.Logger($"Acnkowledged consensus on instance {request.InstanceId}.");
 
             List<Lease.Lease> leases = new List<Lease.Lease>();
@@ -90,7 +96,6 @@ namespace TransactionManager
                 leases.Add(new Lease.Lease(lease.TmId, new List<string>(lease.DataKeys)));
             });
             this.transactionManager.SetCurrentLeases(leases);
-            InstanceResultResponse response = new InstanceResultResponse();
             return Task.FromResult(response);
         }
 
