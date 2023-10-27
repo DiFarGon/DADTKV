@@ -33,7 +33,16 @@ namespace Client
             this.assignedTmId = assignedTmId;
             this.debug = debug;
 
-            this.Logger("created");
+            this.Debug("created");
+        }
+
+        /// <summary>
+        /// Logs debug message prefixing it with an identifier
+        /// </summary>
+        /// <param name="message"></param>
+        public void Debug(string message)
+        {
+            if (debug) this.Logger(message);
         }
 
         /// <summary>
@@ -42,15 +51,12 @@ namespace Client
         /// <param name="message"></param>
         private void Logger(string message)
         {
-            if (debug)
-            {
-                Console.WriteLine($"[Client {this.id}]\t" + message + '\n');
-            }
+            Console.WriteLine($"[Client {this.id}]\t" + message + '\n');
         }
 
         public void setTmClusterNodes(string tms)
         {
-            this.Logger("set transaction managers");
+            this.Debug("set transaction managers");
             string[] keyValuePairs = tms.Split('!', StringSplitOptions.RemoveEmptyEntries);
 
             foreach (string pair in keyValuePairs)
@@ -81,7 +87,7 @@ namespace Client
 
             Match match = Regex.Match(line, pattern);
 
-            this.Logger("Wait " + match.Value);
+            this.Debug("Wait " + match.Value);
             Thread.Sleep(int.Parse(match.Value));
         }
 
@@ -91,7 +97,7 @@ namespace Client
         /// <param name="line"></param>
         public void handleT(string line)
         {
-            this.Logger("Sending Transaction Request to " + assignedTmId);
+            this.Debug("Sending Transaction Request to " + assignedTmId);
             TransactionRequest transactionRequest = new TransactionRequest { ClientId = this.id };
 
             string pattern = @"\(([^)]*)\)(?:\s*,\s*\(([^)]*)\))?";
@@ -103,8 +109,8 @@ namespace Client
             string stringRead = matchesInput.Count > 0 ? matchesInput[0].Groups[1].Value : "";
             string stringWrite = matchesInput.Count > 1 ? matchesInput[1].Groups[1].Value : "";
 
-            Console.WriteLine("Read: " + stringRead);
-            Console.WriteLine("Write: " + stringWrite);
+            this.Logger("Read: " + stringRead);
+            this.Logger("Write: " + stringWrite);
 
             TransactionMessage transactionMessage = new TransactionMessage { };
 
@@ -138,22 +144,22 @@ namespace Client
             try
             {
                 TransactionResponse response = tmClient.Transaction(transactionRequest, callOptions);
-                this.Logger("Received response");
+                this.Debug("Received response");
                 foreach (DadIntMessage di in response.Read)
                 {
                     if (di.Value == int.MinValue)
                     {
-                        Console.WriteLine("DadInt " + di.Key + " with value: " + "null");
+                        this.Logger("DadInt " + di.Key + " with value: " + "null");
                     }
                     else
                     {
-                        Console.WriteLine("DadInt " + di.Key + " with value: " + di.Value);
+                        this.Logger("DadInt " + di.Key + " with value: " + di.Value);
                     }
                 }
             }
             catch (Exception e)
             {
-                this.Logger("Caught exception " + e.Message);
+                this.Debug("Caught exception " + e.Message);
                 this.handleException();
                 this.handleT(line);
             }
@@ -164,14 +170,14 @@ namespace Client
         /// </summary>
         public void handleS()
         {
-            this.Logger("Sending Status Request");
+            this.Debug("Sending Status Request");
             try
             {
                 tmClient.Status(new StatusRequest { });
             }
             catch (Exception e)
             {
-                this.Logger("Caught exception " + e.Message);
+                this.Debug("Caught exception " + e.Message);
                 this.handleException();
                 this.handleS();
             }
@@ -179,7 +185,7 @@ namespace Client
 
         public void handleException()
         {
-            this.Logger("Handle Exception!");
+            this.Debug("Handle Exception!");
             Random random = new Random();
             this.ids_tmServices.Remove(assignedTmId);
 
